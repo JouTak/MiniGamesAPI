@@ -1,8 +1,8 @@
 name: ${NAME}
 version: ${VERSION}
 api-version: ${MINECRAFT_VERSION}
-main: ru.joutak.template.EmptyPlugin
-description: 'A template plugin'
+main: ru.joutak.spartakiad.SpartakiadManager
+description: 'Плагин для управления мини-играми и проведения спартакиад на сервере ITMOCraft.MiniGames'
 authors: ['EnderDissa', 'Stunnerer', 's4dnex']
 contributors: ['technosimp']
 website: ${WEBSITE}
