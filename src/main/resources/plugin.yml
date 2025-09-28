@@ -7,6 +7,6 @@ authors: ['EnderDissa', 'Stunnerer', 's4dnex']
 contributors: ['technosimp']
 website: ${WEBSITE}
 
-depend: []
+depend: [ 'LibreLogin' ]
 libraries:
   - 'org.jetbrains.kotlin:kotlin-stdlib:${KOTLIN_VERSION}'

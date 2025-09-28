@@ -18,11 +18,15 @@ repositories {
     maven("https://oss.sonatype.org/content/groups/public/") {
         name = "sonatype"
     }
+    maven("https://repo.kyngs.xyz/public") {
+        name = "libre-login-repo"
+    }
 }
 
 dependencies {
     compileOnly(libs.kotlin)
     compileOnly(libs.paper)
+    compileOnly(libs.librelogin)
 }
 
 kotlin {
