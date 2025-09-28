@@ -2,7 +2,9 @@ package ru.joutak.minigames
 
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bukkit.Bukkit
+import org.bukkit.World
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.mg.MiniGamesCommand
 import ru.joutak.minigames.command.mg.StartCommand
@@ -12,6 +14,9 @@ import ru.joutak.minigames.config.provider.YamlConfigProvider
 import ru.joutak.minigames.listener.PlayerLoginListener
 import ru.joutak.minigames.spartakiad.SpartakiadManager
 import ru.joutak.minigames.spartakiad.participant.provider.YamlParticipantsProvider
+import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
+import xyz.kyngs.librelogin.api.LibreLoginPlugin
+import xyz.kyngs.librelogin.api.provider.LibreLoginProvider
 import kotlin.io.path.exists
 import kotlin.io.path.name
 
@@ -23,6 +28,7 @@ class MiniGamesPlugin : JavaPlugin() {
 
     private lateinit var configuration: Config
     private lateinit var spartakiadManager: SpartakiadManager
+    private lateinit var libreLogin: LibreLoginPlugin<Player, World>
 
     /**
      * Plugin startup logic
@@ -31,6 +37,7 @@ class MiniGamesPlugin : JavaPlugin() {
         instance = this
 
         loadConfiguration()
+        loadDependencies()
         initSpartakiadManager()
         registerEvents()
         registerCommands()
@@ -49,6 +56,15 @@ class MiniGamesPlugin : JavaPlugin() {
         configuration = Config(configProvider)
     }
 
+    private fun loadDependencies() {
+        val libreLoginProvider = Bukkit.getPluginManager().getPlugin("LibreLogin") as LibreLoginProvider<Player, World>?
+        if (libreLoginProvider == null) {
+            logger.severe("Не удалось получить доступ к API LibreLogin!")
+            server.pluginManager.disablePlugin(this)
+        }
+        libreLogin = libreLoginProvider!!.libreLogin
+    }
+
     private fun initSpartakiadManager() {
         val participantsPath = dataPath.resolve("participants.yml")
         if (!participantsPath.exists()) {
@@ -57,7 +73,8 @@ class MiniGamesPlugin : JavaPlugin() {
         }
 
         val participantsProvider = YamlParticipantsProvider(participantsPath.toFile())
-        spartakiadManager = SpartakiadManager(participantsProvider)
+        val uuidResolver = LibreLoginUuidResolver(libreLogin)
+        spartakiadManager = SpartakiadManager(participantsProvider, uuidResolver)
     }
 
     private fun registerEvents() {
