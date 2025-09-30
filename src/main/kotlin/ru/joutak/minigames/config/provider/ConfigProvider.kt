@@ -2,7 +2,7 @@ package ru.joutak.minigames.config.provider
 
 import ru.joutak.minigames.config.ConfigKey
 
-interface ConfigProvider {
+interface ConfigProvider : AutoCloseable {
     fun get(path: String): Any?
 
     fun set(

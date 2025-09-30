@@ -23,7 +23,7 @@ class Config(
                     provider.set(key.path, key.default)
                     key.default
                 } else {
-                    provider.get(key.path) ?: key.default
+                    provider.get(key.path)!!
                 }
             values[key] = value
         }
@@ -33,8 +33,20 @@ class Config(
         provider.save(values)
     }
 
+    fun saveAndClose() {
+        save()
+        provider.close()
+    }
+
     @Suppress("UNCHECKED_CAST")
-    fun <T : Any> get(key: ConfigKey<T>): T = values[key] as? T ?: key.default
+    fun <T : Any> get(key: ConfigKey<T>): T {
+        val value = values[key] as? T
+        if (value == null) {
+            MiniGamesPlugin.instance.logger.warning("Не удалось получить значение ключа $key из конфига, взято стандартное значение!")
+            return key.default
+        }
+        return value
+    }
 
     @Synchronized
     fun <T : Any> set(
