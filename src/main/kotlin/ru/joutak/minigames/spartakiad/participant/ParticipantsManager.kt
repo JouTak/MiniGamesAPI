@@ -1,7 +1,5 @@
 package ru.joutak.minigames.spartakiad.participant
 
-import org.bukkit.Bukkit
-import ru.joutak.minigames.domain.Participant
 import ru.joutak.minigames.spartakiad.participant.provider.ParticipantsProvider
 import ru.joutak.minigames.util.uuid.UuidResolver
 import java.util.UUID
@@ -11,10 +9,10 @@ import kotlin.concurrent.read
 import kotlin.concurrent.write
 
 class ParticipantsManager(
-    private val provider: ParticipantsProvider,
+    private val participantsProvider: ParticipantsProvider,
     private val resolver: UuidResolver,
-) {
-    private val participants = ConcurrentHashMap<UUID, Participant>()
+) : AutoCloseable {
+    private val participants = ConcurrentHashMap<String, UUID>()
 
     private val lock = ReentrantReadWriteLock()
 
@@ -23,17 +21,16 @@ class ParticipantsManager(
     }
 
     fun reload() {
-        val names = provider.load()
-        val newParticipants = mutableMapOf<UUID, Participant>()
+        val names = participantsProvider.load()
+        val newParticipants = mutableMapOf<String, UUID>()
 
         for (name in names) {
             val name = name.trim()
             if (name.isBlank()) continue
 
-            val uuid = resolver.resolveByName(name)
+            val uuid = resolver.getUuid(name) ?: continue
 
-            val p = Participant(uuid, name)
-            newParticipants[uuid] = p
+            newParticipants[name] = uuid
         }
 
         lock.write {
@@ -42,40 +39,32 @@ class ParticipantsManager(
         }
     }
 
-    fun getAll(): List<Participant> = lock.read { participants.values.map { it } }
+    fun getAll(): Map<String, UUID> = lock.read { participants }
 
-    fun contains(uuid: UUID): Boolean = participants.containsKey(uuid)
+    fun contains(name: String): Boolean = participants.containsKey(name)
 
-    fun get(uuid: UUID): Participant? = participants[uuid]
-
-    fun get(name: String): Participant? = participants.values.firstOrNull { it.username == name }
+    fun get(name: String): UUID? = participants[name]
 
     @Synchronized
     fun add(name: String): Boolean {
-        val trimmed = name.trim()
-        if (trimmed.isBlank()) return false
+        val preparedName = name.trim()
+        if (preparedName.isBlank()) return false
 
-        val uuid = resolver.resolveByName(name)
-        if (participants.containsKey(uuid)) return false
+        val uuid = resolver.getUuid(preparedName)
+        if (uuid == null || participants.containsValue(uuid)) return false
 
-        val p = resolver.getParticipant(uuid)
-        participants[uuid] = p
-
-        provider.save(getAll().map { it.username })
+        lock.write {
+            participants[preparedName] = uuid
+        }
+        participantsProvider.save(getAll().keys)
 
         return true
     }
 
     @Synchronized
-    fun remove(uuid: UUID): Boolean {
-        val removed = participants.remove(uuid) != null
-        if (removed) provider.save(getAll().map { it.username })
-        return removed
-    }
+    fun remove(name: String) = lock.write { participants.remove(name) }
 
-    @Synchronized
-    fun remove(name: String): Boolean {
-        val uuid = resolver.resolveByName(name)
-        return remove(uuid)
+    override fun close() {
+        participantsProvider.close()
     }
 }

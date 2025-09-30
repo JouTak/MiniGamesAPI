@@ -29,8 +29,13 @@ class YamlParticipantsProvider(
     private fun saveToFile(yaml: YamlConfiguration) {
         try {
             yaml.save(file)
-        } catch (ex: Exception) {
-            ex.printStackTrace() // или лог плагина
+        } catch (e: Exception) {
+            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${e.message}")
+            MiniGamesPlugin.instance.logger.severe(e.stackTraceToString())
         }
+    }
+
+    override fun close() {
+        TODO("Not yet implemented")
     }
 }
