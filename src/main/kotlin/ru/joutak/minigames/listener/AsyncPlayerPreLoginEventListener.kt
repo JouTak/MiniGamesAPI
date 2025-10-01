@@ -1,17 +1,16 @@
 package ru.joutak.minigames.listener
 
-import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
+import org.bukkit.event.player.AsyncPlayerPreLoginEvent
 import org.bukkit.event.player.PlayerLoginEvent
 import ru.joutak.minigames.MiniGamesPlugin
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.locale.Message
-import ru.joutak.minigames.spartakiad.SpartakiadManager
 
-object PlayerLoginListener : Listener {
+object AsyncPlayerPreLoginEventListener : Listener {
     @EventHandler
-    fun onPlayerLogin(event: PlayerLoginEvent) {
+    fun onAsyncPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
         if (!MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.SPARTAKIAD_ENABLED)) {
             return
         }
@@ -19,9 +18,9 @@ object PlayerLoginListener : Listener {
         if (!MiniGamesPlugin.instance
                 .getSpartakiadManager()
                 .getParticipantsManager()
-                .contains(event.player.name)
+                .contains(event.name)
         ) {
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, Message.KICK_NON_PARTICIPANT)
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, Message.KICK_NON_PARTICIPANT)
             return
         }
 
@@ -29,12 +28,12 @@ object PlayerLoginListener : Listener {
             MiniGamesPlugin.instance
                 .getSpartakiadManager()
                 .getParticipantsManager()
-                .get(event.player.name)
+                .get(event.name)
 
         if (uuid == null) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось получить UUID игрока ${event.player.name} при входе!")
+            MiniGamesPlugin.instance.logger.severe("Не удалось получить UUID игрока ${event.name} при входе!")
             event.disallow(
-                PlayerLoginEvent.Result.KICK_OTHER,
+                AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
                 Message.KICK_UNEXPECTED_ERROR,
             )
             return
@@ -46,20 +45,21 @@ object PlayerLoginListener : Listener {
                 .getPlayerDataManager()
                 .getPlayerData(
                     uuid,
-                    event.player.name,
+                    event.name,
                 ).join()
 
-        // MiniGamesPlugin.instance.logger.info(playerData.toString())
+        MiniGamesPlugin.instance.logger.info(playerData.toString())
+        MiniGamesPlugin.instance.logger.warning(Thread.currentThread().name)
 
         if (playerData.won) {
             // MiniGamesPlugin.instance.logger.info("${playerData.name} won: ${playerData.won}")
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, Message.KICK_WINNER)
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, Message.KICK_WINNER)
             return
         }
 
         if (playerData.attempts <= 0) {
             // MiniGamesPlugin.instance.logger.info("${playerData.name} attempts: ${playerData.attempts}")
-            event.disallow(PlayerLoginEvent.Result.KICK_WHITELIST, Message.KICK_NO_ATTEMPTS)
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, Message.KICK_NO_ATTEMPTS)
             return
         }
     }
