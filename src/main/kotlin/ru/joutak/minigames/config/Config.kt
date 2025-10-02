@@ -42,7 +42,9 @@ class Config(
     fun <T : Any> get(key: ConfigKey<T>): T {
         val value = values[key] as? T
         if (value == null) {
-            MiniGamesPlugin.instance.logger.warning("Не удалось получить значение ключа $key из конфига, взято стандартное значение!")
+            MiniGamesPlugin.instance.logger.warning(
+                "Не удалось получить значение ключа $key из конфига! Взято стандартное значение: ${key.default}",
+            )
             return key.default
         }
         return value

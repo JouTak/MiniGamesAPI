@@ -5,16 +5,16 @@ import ru.joutak.minigames.MiniGamesPlugin
 import java.io.File
 
 class YamlParticipantsProvider(
-    private val file: File,
+    private val participantsFile: File,
 ) : ParticipantsProvider {
     private val key = "participants"
 
-    private val yamlParticipants: YamlConfiguration = YamlConfiguration.loadConfiguration(file)
+    private val yamlParticipants: YamlConfiguration = YamlConfiguration.loadConfiguration(participantsFile)
 
     @Synchronized
     override fun load(): List<String> {
         if (!yamlParticipants.contains(key)) {
-            MiniGamesPlugin.instance.logger.warning("Не найден ключ $key в файле с участниками ${file.name}!")
+            MiniGamesPlugin.instance.logger.warning("Не найден ключ $key в файле с участниками ${participantsFile.name}!")
             return emptyList()
         }
         return yamlParticipants.getStringList(key).map { it.trim() }.filter { it.isNotBlank() }
@@ -28,7 +28,7 @@ class YamlParticipantsProvider(
 
     private fun saveToFile(yaml: YamlConfiguration) {
         try {
-            yaml.save(file)
+            yaml.save(participantsFile)
         } catch (e: Exception) {
             MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${e.message}")
             MiniGamesPlugin.instance.logger.severe(e.stackTraceToString())

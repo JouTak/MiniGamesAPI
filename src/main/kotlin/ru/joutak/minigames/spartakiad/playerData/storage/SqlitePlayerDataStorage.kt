@@ -11,19 +11,19 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class SqlitePlayerDataStorage(
-    private val dbFile: File,
+    private val databaseFile: File,
 ) : PlayerDataStorage {
     private val executor: ExecutorService =
         Executors.newSingleThreadExecutor { r ->
-            Thread(r, "playerdata-sqlite-${dbFile.name}").apply { isDaemon = true }
+            Thread(r, "playerdata-sqlite-${databaseFile.name}").apply { isDaemon = true }
         }
 
     private val connection: Connection
 
     init {
-        dbFile.parentFile?.mkdirs()
+        databaseFile.parentFile?.mkdirs()
 
-        val url = "jdbc:sqlite:${dbFile.absolutePath}"
+        val url = "jdbc:sqlite:${databaseFile.absolutePath}"
         Class.forName("org.sqlite.JDBC")
         connection =
             DriverManager.getConnection(url).apply {

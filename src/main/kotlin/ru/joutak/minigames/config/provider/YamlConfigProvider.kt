@@ -11,24 +11,24 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
 class YamlConfigProvider(
-    private val file: File,
+    private val configFile: File,
     private val debounceMillis: Long = 200L,
     private val closeTimeoutMillis: Long = 5000L,
 ) : ConfigProvider {
-    private val configRef: AtomicReference<YamlConfiguration> = AtomicReference(YamlConfiguration.loadConfiguration(file))
+    private val configRef: AtomicReference<YamlConfiguration> = AtomicReference(YamlConfiguration.loadConfiguration(configFile))
 
     @Volatile
     private var pendingSaveFuture: ScheduledFuture<*>? = null
 
     private val executor: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { r ->
-            Thread(r, "yaml-config-writer-${file.name}").apply { isDaemon = true }
+            Thread(r, "yaml-config-writer-${configFile.name}").apply { isDaemon = true }
         }
 
     @Synchronized
     override fun get(path: String): Any? {
-        val config = configRef.get()
-        return config.get(path)
+        val yamlConfig = configRef.get()
+        return yamlConfig.get(path)
     }
 
     @Synchronized
@@ -37,39 +37,39 @@ class YamlConfigProvider(
         value: Any?,
     ) {
         executor.execute {
-            val config = configRef.get()
-            config.set(path, value)
-            scheduleSave(config)
+            val yamlConfig = configRef.get()
+            yamlConfig.set(path, value)
+            scheduleSave(yamlConfig)
         }
     }
 
     @Synchronized
     override fun contains(path: String): Boolean {
-        val config = configRef.get()
-        return config.contains(path)
+        val yamlConfig = configRef.get()
+        return yamlConfig.contains(path)
     }
 
     override fun save(values: Map<ConfigKey<*>, Any>) {
         executor.execute {
-            val config = configRef.get()
+            val yamlConfig = configRef.get()
             for ((key, value) in values) {
-                config.set(key.path, value)
+                yamlConfig.set(key.path, value)
             }
-            scheduleSave(config)
+            scheduleSave(yamlConfig)
         }
     }
 
-    private fun scheduleSave(config: YamlConfiguration) {
+    private fun scheduleSave(yamlConfig: YamlConfiguration) {
         pendingSaveFuture?.cancel(false)
         pendingSaveFuture =
             executor.schedule({
-                saveToFile(config)
+                saveToFile(yamlConfig)
             }, debounceMillis, TimeUnit.MILLISECONDS)
     }
 
-    private fun saveToFile(config: YamlConfiguration) {
+    private fun saveToFile(yamlConfig: YamlConfiguration) {
         try {
-            config.save(file)
+            yamlConfig.save(configFile)
         } catch (e: Exception) {
             MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${e.message}")
             MiniGamesPlugin.instance.logger.severe(e.stackTraceToString())
@@ -79,9 +79,9 @@ class YamlConfigProvider(
     override fun close() {
         val future =
             executor.submit {
-                val config = configRef.get()
+                val yamlConfig = configRef.get()
                 pendingSaveFuture?.cancel(false)
-                saveToFile(config)
+                saveToFile(yamlConfig)
             }
         try {
             future.get(closeTimeoutMillis, TimeUnit.MILLISECONDS)
