@@ -3,12 +3,11 @@ package ru.joutak.minigames.listener
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent
-import org.bukkit.event.player.PlayerLoginEvent
 import ru.joutak.minigames.MiniGamesPlugin
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.locale.Message
 
-object AsyncPlayerPreLoginEventListener : Listener {
+object AsyncPlayerPreLoginListener : Listener {
     @EventHandler
     fun onAsyncPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
         if (!MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.SPARTAKIAD_ENABLED)) {
@@ -48,8 +47,8 @@ object AsyncPlayerPreLoginEventListener : Listener {
                     event.name,
                 ).join()
 
-        MiniGamesPlugin.instance.logger.info(playerData.toString())
-        MiniGamesPlugin.instance.logger.warning(Thread.currentThread().name)
+        // MiniGamesPlugin.instance.logger.info(playerData.toString())
+        // MiniGamesPlugin.instance.logger.warning(Thread.currentThread().name)
 
         if (playerData.won) {
             // MiniGamesPlugin.instance.logger.info("${playerData.name} won: ${playerData.won}")
