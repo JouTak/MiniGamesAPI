@@ -1,7 +1,7 @@
 [versions]
 kotlin = "2.2.0"
 jdk = "21"
-paper = "1.21.5-R0.1-SNAPSHOT"
+paper = "1.21.7-R0.1-SNAPSHOT"
 shadow = "9.1.0"
 librelogin = "0.24.0"
 
