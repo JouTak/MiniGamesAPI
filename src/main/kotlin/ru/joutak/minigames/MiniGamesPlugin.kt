@@ -15,6 +15,7 @@ import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.provider.YamlConfigProvider
 import ru.joutak.minigames.domain.PlayerData
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
+import ru.joutak.minigames.listener.ParticipantsListReloadedListener
 import ru.joutak.minigames.spartakiad.SpartakiadManager
 import ru.joutak.minigames.spartakiad.participant.provider.YamlParticipantsProvider
 import ru.joutak.minigames.spartakiad.playerData.storage.SqlitePlayerDataStorage
@@ -92,7 +93,6 @@ class MiniGamesPlugin : JavaPlugin() {
             logger.warning("Не найден файл с участниками ${participantsPath.name}! Создан файл с пустым списком.")
         }
         val participantsProvider = YamlParticipantsProvider(participantsPath.toFile())
-
         val uuidResolver =
             if (configuration.get(ConfigKeys.USE_LIBRE_LOGIN)) {
                 LibreLoginUuidResolver(libreLogin!!)
@@ -112,6 +112,7 @@ class MiniGamesPlugin : JavaPlugin() {
 
     private fun registerEvents() {
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, this)
+        Bukkit.getPluginManager().registerEvents(ParticipantsListReloadedListener, this)
     }
 
     private fun registerCommands() {
