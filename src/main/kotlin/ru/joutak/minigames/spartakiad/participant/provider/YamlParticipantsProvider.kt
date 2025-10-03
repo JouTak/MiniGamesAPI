@@ -4,6 +4,8 @@ import org.bukkit.configuration.file.YamlConfiguration
 import ru.joutak.minigames.MiniGamesPlugin
 import ru.joutak.minigames.config.ConfigKeys
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -24,7 +26,14 @@ class YamlParticipantsProvider(
             Thread(r, "yaml-participants-writer-${participantsFile.name}").apply { isDaemon = true }
         }
 
+    private val participantsFileWatcher: ParticipantsFileWatcher = ParticipantsFileWatcher(participantsFile, this)
+
+    @Volatile
+    private var lastSavedAt: Long = System.currentTimeMillis()
+
     private val key = "participants"
+
+    override fun getLastSavedAt(): Long = lastSavedAt
 
     override fun reload(): CompletableFuture<Unit> =
         CompletableFuture.supplyAsync {
@@ -61,11 +70,13 @@ class YamlParticipantsProvider(
             executor.schedule({
                 saveToFile(yaml)
             }, MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+        lastSavedAt = System.currentTimeMillis()
     }
 
     private fun saveToFile(yaml: YamlConfiguration) {
         try {
             yaml.save(participantsFile)
+            lastSavedAt = System.currentTimeMillis()
         } catch (t: Throwable) {
             MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${t.message}")
             MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
@@ -73,6 +84,8 @@ class YamlParticipantsProvider(
     }
 
     override fun close() {
+        participantsFileWatcher.close()
+
         val future =
             executor.submit {
                 val yamlParticipants = participantsRef.get()

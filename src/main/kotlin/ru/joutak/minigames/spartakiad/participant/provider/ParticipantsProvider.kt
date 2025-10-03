@@ -8,4 +8,6 @@ interface ParticipantsProvider : AutoCloseable {
     fun save(participants: Collection<String>)
 
     fun reload(): CompletableFuture<Unit>
+
+    fun getLastSavedAt(): Long
 }
