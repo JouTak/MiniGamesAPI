@@ -1,12 +1,13 @@
 package ru.joutak.minigames.spartakiad.participant
 
+import org.bukkit.Bukkit
+import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.event.ParticipantsListReloadedEvent
 import ru.joutak.minigames.spartakiad.participant.provider.ParticipantsProvider
 import ru.joutak.minigames.util.uuid.UuidResolver
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReentrantReadWriteLock
-import kotlin.concurrent.read
-import kotlin.concurrent.write
 
 class ParticipantsManager(
     private val participantsProvider: ParticipantsProvider,
@@ -14,55 +15,74 @@ class ParticipantsManager(
 ) : AutoCloseable {
     private val participants = ConcurrentHashMap<String, UUID>()
 
-    private val lock = ReentrantReadWriteLock()
+    fun reload(): CompletableFuture<Unit> {
+        return participantsProvider
+            .reload()
+            .thenCompose {
+                val names = participantsProvider.getAll()
+                clear()
 
-    init {
-        reload()
+                val futures =
+                    names
+                        .map { name ->
+                            add(name).exceptionally { cause ->
+                                MiniGamesPlugin.instance.logger.warning("Не удалось добавить участника $name: ${cause.message}")
+                            }
+                        }.toTypedArray()
+
+                return@thenCompose CompletableFuture.allOf(*futures)
+            }.thenApply {
+                Bukkit.getScheduler().runTask(
+                    MiniGamesPlugin.instance,
+                    Runnable {
+                        Bukkit.getPluginManager().callEvent(ParticipantsListReloadedEvent(getAll().keys))
+                    },
+                )
+                MiniGamesPlugin.instance.logger.info("Список участников был перезагружен!")
+            }
     }
 
-    fun reload() {
-        val names = participantsProvider.load()
-        val newParticipants = mutableMapOf<String, UUID>()
-
-        for (name in names) {
-            val name = name.trim()
-            if (name.isBlank()) continue
-
-            val uuid = resolver.getUuid(name) ?: continue
-
-            newParticipants[name] = uuid
-        }
-
-        lock.write {
-            participants.clear()
-            participants.putAll(newParticipants)
-        }
-    }
-
-    fun getAll(): Map<String, UUID> = lock.read { participants }
+    fun getAll(): Map<String, UUID> = participants
 
     fun contains(name: String): Boolean = participants.containsKey(name)
 
     fun get(name: String): UUID? = participants[name]
 
     @Synchronized
-    fun add(name: String): Boolean {
-        val preparedName = name.trim()
-        if (preparedName.isBlank()) return false
+    @Throws(IllegalArgumentException::class)
+    fun add(name: String): CompletableFuture<Unit> {
+        return CompletableFuture
+            .supplyAsync {
+                val preparedName = name.trim()
+                if (preparedName.isBlank()) {
+                    throw IllegalArgumentException("Недопустимое имя у игрока $name!")
+                }
 
-        val uuid = resolver.getUuid(preparedName)
-        if (uuid == null || participants.containsValue(uuid)) return false
+                val uuid =
+                    resolver.getUuid(preparedName)
+                        ?: throw IllegalArgumentException("Не удалось получить UUID игрока $preparedName!")
 
-        lock.write {
-            participants[preparedName] = uuid
-        }
-        participantsProvider.save(getAll().keys)
+                if (participants.containsValue(uuid)) {
+                    throw IllegalArgumentException("Игрок с именем $preparedName уже есть в списке!")
+                }
 
-        return true
+                return@supplyAsync Pair(preparedName, uuid)
+            }.thenAccept { pair ->
+                add(pair.first, pair.second)
+            }.thenApply {}
     }
 
-    @Synchronized
-    fun remove(name: String) = lock.write { participants.remove(name) }
+    private fun add(
+        name: String,
+        uuid: UUID,
+    ) {
+        participants[name] = uuid
+        participantsProvider.save(getAll().keys)
+    }
+
+    fun remove(name: String) = participants.remove(name)
+
+    fun clear() = participants.clear()
 
     override fun close() {
         participantsProvider.close()

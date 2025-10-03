@@ -19,10 +19,13 @@ class SpartakiadManager(
     private val playerDataManager = PlayerDataManager(playerDataProvider)
 
     init {
-        val participants = participantsManager.getAll()
-        playerDataManager
-            .prefillParticipants(participants)
-            .thenAccept {
+        participantsManager
+            .reload()
+            .thenCompose {
+                val participants = participantsManager.getAll()
+                return@thenCompose playerDataManager
+                    .prefillParticipants(participants)
+            }.thenAccept {
                 MiniGamesPlugin.instance.logger.info("Информация об игроках успешно заполнена!")
             }.exceptionally { t ->
                 MiniGamesPlugin.instance.logger.severe("Не удалось заполнить информацию об участниках: ${t.message}")
