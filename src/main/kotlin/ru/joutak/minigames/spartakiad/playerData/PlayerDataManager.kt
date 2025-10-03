@@ -13,13 +13,9 @@ class PlayerDataManager(
     fun getPlayerData(
         uuid: UUID,
         name: String,
-    ): CompletableFuture<PlayerData> =
-        playerDataStorage.createIfNotExists(
+    ): CompletableFuture<PlayerData?> =
+        playerDataStorage.getPlayerData(
             uuid,
-            name,
-            MiniGamesPlugin.instance.getConfiguration().get(
-                ConfigKeys.SPARTAKIAD_ATTEMPTS,
-            ),
         )
 
     fun decrementAttempt(uuid: UUID): CompletableFuture<Int?> = playerDataStorage.decrementAttempt(uuid)

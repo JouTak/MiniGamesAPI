@@ -50,6 +50,11 @@ object AsyncPlayerPreLoginListener : Listener {
         // MiniGamesPlugin.instance.logger.info(playerData.toString())
         // MiniGamesPlugin.instance.logger.warning(Thread.currentThread().name)
 
+        if (playerData == null) {
+            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, Message.KICK_UNEXPECTED_ERROR)
+            return
+        }
+
         if (playerData.won) {
             // MiniGamesPlugin.instance.logger.info("${playerData.name} won: ${playerData.won}")
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, Message.KICK_WINNER)
