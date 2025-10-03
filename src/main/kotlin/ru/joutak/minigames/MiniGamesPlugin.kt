@@ -59,7 +59,7 @@ class MiniGamesPlugin : JavaPlugin() {
     private fun loadConfiguration() {
         val configPath = dataPath.resolve("config.yml")
         if (!configPath.exists()) {
-            logger.warning("Не найден файл c конфигом ${configPath.name}! Создан файл со стандартными значениями.")
+            logger.warning("Не найден файл c конфигом ${configPath.name}!")
             saveResource(configPath.name, false)
         }
 

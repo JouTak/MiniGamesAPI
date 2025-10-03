@@ -3,7 +3,9 @@ package ru.joutak.minigames.config.provider
 import org.bukkit.configuration.file.YamlConfiguration
 import ru.joutak.minigames.MiniGamesPlugin
 import ru.joutak.minigames.config.ConfigKey
+import ru.joutak.minigames.config.ConfigKeys
 import java.io.File
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
@@ -12,8 +14,6 @@ import java.util.concurrent.atomic.AtomicReference
 
 class YamlConfigProvider(
     private val configFile: File,
-    private val debounceMillis: Long = 200L,
-    private val closeTimeoutMillis: Long = 5000L,
 ) : ConfigProvider {
     private val configRef: AtomicReference<YamlConfiguration> = AtomicReference(YamlConfiguration.loadConfiguration(configFile))
 
@@ -25,7 +25,19 @@ class YamlConfigProvider(
             Thread(r, "yaml-config-writer-${configFile.name}").apply { isDaemon = true }
         }
 
-    @Synchronized
+    override fun reload(): CompletableFuture<Unit> =
+        CompletableFuture
+            .supplyAsync {
+                try {
+                    val yamlParticipants = YamlConfiguration.loadConfiguration(configFile)
+                    configRef.set(yamlParticipants)
+                    // Bukkit.getPluginManager().callEvent(FileReloadedEvent(getAll()))
+                } catch (t: Throwable) {
+                    MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл с конфигом: ${t.message}")
+                    configRef.set(YamlConfiguration())
+                }
+            }
+
     override fun get(path: String): Any? {
         val yamlConfig = configRef.get()
         return yamlConfig.get(path)
@@ -43,12 +55,12 @@ class YamlConfigProvider(
         }
     }
 
-    @Synchronized
     override fun contains(path: String): Boolean {
         val yamlConfig = configRef.get()
         return yamlConfig.contains(path)
     }
 
+    @Synchronized
     override fun save(values: Map<ConfigKey<*>, Any>) {
         executor.execute {
             val yamlConfig = configRef.get()
@@ -64,15 +76,15 @@ class YamlConfigProvider(
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(yamlConfig)
-            }, debounceMillis, TimeUnit.MILLISECONDS)
+            }, MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
     }
 
     private fun saveToFile(yamlConfig: YamlConfiguration) {
         try {
             yamlConfig.save(configFile)
-        } catch (e: Exception) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${e.message}")
-            MiniGamesPlugin.instance.logger.severe(e.stackTraceToString())
+        } catch (t: Throwable) {
+            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${t.message}")
+            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
         }
     }
 
@@ -84,7 +96,7 @@ class YamlConfigProvider(
                 saveToFile(yamlConfig)
             }
         try {
-            future.get(closeTimeoutMillis, TimeUnit.MILLISECONDS)
+            future.get(MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
         } catch (t: Throwable) {
             MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${t.message}")
             MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
