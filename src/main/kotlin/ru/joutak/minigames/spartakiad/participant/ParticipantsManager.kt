@@ -2,7 +2,7 @@ package ru.joutak.minigames.spartakiad.participant
 
 import org.bukkit.Bukkit
 import ru.joutak.minigames.MiniGamesPlugin
-import ru.joutak.minigames.event.ParticipantsListReloadedEvent
+import ru.joutak.minigames.event.ParticipantsListReloadEvent
 import ru.joutak.minigames.spartakiad.participant.provider.ParticipantsProvider
 import ru.joutak.minigames.util.uuid.UuidResolver
 import java.util.UUID
@@ -35,7 +35,7 @@ class ParticipantsManager(
                 Bukkit.getScheduler().runTask(
                     MiniGamesPlugin.instance,
                     Runnable {
-                        Bukkit.getPluginManager().callEvent(ParticipantsListReloadedEvent(getAll().keys))
+                        Bukkit.getPluginManager().callEvent(ParticipantsListReloadEvent(getAll().keys))
                     },
                 )
                 MiniGamesPlugin.instance.logger.info("Список участников был перезагружен!")

@@ -3,9 +3,7 @@ package ru.joutak.minigames.event
 import org.bukkit.event.Event
 import org.bukkit.event.HandlerList
 
-class ParticipantsListReloadedEvent(
-    val participants: Iterable<String>,
-) : Event() {
+class ParticipantsListChangeEvent : Event() {
     companion object {
         @JvmStatic
         private val handlersList = HandlerList()

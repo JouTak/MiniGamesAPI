@@ -15,7 +15,8 @@ import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.provider.YamlConfigProvider
 import ru.joutak.minigames.domain.PlayerData
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
-import ru.joutak.minigames.listener.ParticipantsListReloadedListener
+import ru.joutak.minigames.listener.ParticipantsListChangeListener
+import ru.joutak.minigames.listener.ParticipantsListReloadListener
 import ru.joutak.minigames.spartakiad.SpartakiadManager
 import ru.joutak.minigames.spartakiad.participant.provider.YamlParticipantsProvider
 import ru.joutak.minigames.spartakiad.playerData.storage.SqlitePlayerDataStorage
@@ -112,7 +113,8 @@ class MiniGamesPlugin : JavaPlugin() {
 
     private fun registerEvents() {
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, this)
-        Bukkit.getPluginManager().registerEvents(ParticipantsListReloadedListener, this)
+        Bukkit.getPluginManager().registerEvents(ParticipantsListReloadListener, this)
+        Bukkit.getPluginManager().registerEvents(ParticipantsListChangeListener, this)
     }
 
     private fun registerCommands() {
