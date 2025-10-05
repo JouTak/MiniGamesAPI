@@ -4,19 +4,38 @@ import ru.joutak.minigames.MiniGamesPlugin
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.domain.PlayerData
 import ru.joutak.minigames.spartakiad.playerData.storage.PlayerDataStorage
+import ru.joutak.minigames.util.uuid.UuidResolver
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 
 class PlayerDataManager(
     private val playerDataStorage: PlayerDataStorage,
+    private val uuidResolver: UuidResolver,
 ) {
-    fun getPlayerData(
-        uuid: UUID,
-        name: String,
-    ): CompletableFuture<PlayerData?> =
+    fun get(uuid: UUID): CompletableFuture<PlayerData?> =
         playerDataStorage.getPlayerData(
             uuid,
         )
+
+    fun get(name: String): CompletableFuture<PlayerData?> =
+        getUuid(name).thenCompose { uuid ->
+            playerDataStorage.getPlayerData(uuid)
+        }
+
+    private fun getUuid(name: String): CompletableFuture<UUID> =
+        CompletableFuture
+            .supplyAsync {
+                uuidResolver.getUuid(name) ?: throw NullPointerException("Не удалось получить UUID игрока $name!")
+            }
+
+    fun createIfNotExists(name: String): CompletableFuture<PlayerData> =
+        getUuid(name).thenCompose { uuid ->
+            playerDataStorage.createIfNotExists(
+                uuid,
+                name,
+                MiniGamesPlugin.instance.configuration.get(ConfigKeys.SPARTAKIAD_ATTEMPTS),
+            )
+        }
 
     fun decrementAttempt(uuid: UUID): CompletableFuture<Int?> = playerDataStorage.decrementAttempt(uuid)
 
@@ -37,20 +56,6 @@ class PlayerDataManager(
                 }
             }
         }
-
-    fun prefillParticipants(participants: Map<String, UUID>): CompletableFuture<Unit> {
-        val futures =
-            participants
-                .map { p ->
-                    playerDataStorage.createIfNotExists(
-                        p.value,
-                        p.key,
-                        MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.SPARTAKIAD_ATTEMPTS),
-                    )
-                }.toTypedArray()
-
-        return CompletableFuture.allOf(*futures).thenApply { }
-    }
 
     fun markPlayerWon(uuid: UUID): CompletableFuture<Unit> = playerDataStorage.markWon(uuid)
 

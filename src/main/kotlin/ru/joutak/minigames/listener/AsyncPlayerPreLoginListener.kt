@@ -23,31 +23,15 @@ object AsyncPlayerPreLoginListener : Listener {
             return
         }
 
-        val uuid =
-            MiniGamesPlugin.instance
-                .getSpartakiadManager()
-                .getParticipantsManager()
-                .get(event.name)
-
-        if (uuid == null) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось получить UUID игрока ${event.name} при входе!")
-            event.disallow(
-                AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
-                Message.KICK_UNEXPECTED_ERROR,
-            )
-            return
-        }
-
         val playerData =
             MiniGamesPlugin.instance
-                .getSpartakiadManager()
-                .getPlayerDataManager()
-                .getPlayerData(
-                    uuid,
-                    event.name,
-                ).join()
                 .spartakiadManager
                 .playerDataManager
+                .createIfNotExists(event.name)
+                .exceptionally { t ->
+                    MiniGamesPlugin.instance.logger.severe("Не удалось получить данные об участнике: ${t.message}")
+                    return@exceptionally null
+                }.join()
 
         // MiniGamesPlugin.instance.logger.info(playerData.toString())
         // MiniGamesPlugin.instance.logger.warning(Thread.currentThread().name)

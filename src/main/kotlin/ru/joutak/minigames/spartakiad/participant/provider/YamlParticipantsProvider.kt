@@ -4,8 +4,6 @@ import org.bukkit.configuration.file.YamlConfiguration
 import ru.joutak.minigames.MiniGamesPlugin
 import ru.joutak.minigames.config.ConfigKeys
 import java.io.File
-import java.nio.file.Files
-import java.nio.file.StandardCopyOption
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -35,17 +33,6 @@ class YamlParticipantsProvider(
 
     override fun getLastSavedAt(): Long = lastSavedAt
 
-    override fun reload(): CompletableFuture<Unit> =
-        CompletableFuture.supplyAsync {
-            try {
-                val yamlParticipants = YamlConfiguration.loadConfiguration(participantsFile)
-                participantsRef.set(yamlParticipants)
-            } catch (t: Throwable) {
-                MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл со списком участников: ${t.message}")
-                participantsRef.set(YamlConfiguration())
-            }
-        }
-
     override fun getAll(): List<String> {
         val yamlParticipants = participantsRef.get()
         if (!yamlParticipants.contains(key)) {
@@ -53,6 +40,38 @@ class YamlParticipantsProvider(
             return emptyList()
         }
         return yamlParticipants.getStringList(key).map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    override fun contains(name: String): Boolean {
+        val yamlParticipants = participantsRef.get()
+        if (!yamlParticipants.contains(key)) {
+            return false
+        }
+        return yamlParticipants.getStringList(key).contains(name)
+    }
+
+    override fun add(name: String): Boolean {
+        val yamlParticipants = participantsRef.get()
+        val participantsList = yamlParticipants.getStringList(key)
+        if (participantsList.contains(name)) {
+            return false
+        }
+        participantsList.add(name)
+        yamlParticipants.set(key, participantsList)
+        scheduleSave(yamlParticipants)
+        return true
+    }
+
+    override fun remove(name: String): Boolean {
+        val yamlParticipants = participantsRef.get()
+        val participantsList = yamlParticipants.getStringList(key)
+        if (participantsList.contains(name)) {
+            return false
+        }
+        participantsList.remove(name)
+        yamlParticipants.set(key, participantsList)
+        scheduleSave(yamlParticipants)
+        return true
     }
 
     @Synchronized
@@ -82,6 +101,17 @@ class YamlParticipantsProvider(
             MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
         }
     }
+
+    override fun reload(): CompletableFuture<Unit> =
+        CompletableFuture.supplyAsync {
+            try {
+                val yamlParticipants = YamlConfiguration.loadConfiguration(participantsFile)
+                participantsRef.set(yamlParticipants)
+            } catch (t: Throwable) {
+                MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл со списком участников: ${t.message}")
+                participantsRef.set(YamlConfiguration())
+            }
+        }
 
     override fun close() {
         participantsFileWatcher.close()
