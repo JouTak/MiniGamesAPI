@@ -34,8 +34,10 @@ class MiniGamesPlugin : JavaPlugin() {
         lateinit var instance: MiniGamesPlugin
     }
 
-    private lateinit var configuration: Config
-    private lateinit var spartakiadManager: SpartakiadManager
+    lateinit var configuration: Config
+        private set
+    lateinit var spartakiadManager: SpartakiadManager
+        private set
     private var libreLogin: LibreLoginPlugin<Player, World>? = null
 
     /**
@@ -139,8 +141,4 @@ class MiniGamesPlugin : JavaPlugin() {
         configuration.saveAndClose()
         spartakiadManager.close()
     }
-
-    fun getConfiguration(): Config = configuration
-
-    fun getSpartakiadManager() = spartakiadManager
 }

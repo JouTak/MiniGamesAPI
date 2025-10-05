@@ -57,7 +57,7 @@ class ParticipantsFileWatcher(
                             val now = System.currentTimeMillis()
 
                             if (now - providerLastSaved <
-                                MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS) * 2
+                                MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS) * 2
                             ) {
                                 MiniGamesPlugin.instance.logger.warning(
                                     "Событие изменение файла участников проигнорировано из-за недавнего сохранения файла плагином.",
@@ -99,7 +99,7 @@ class ParticipantsFileWatcher(
                 } catch (t: Throwable) {
                     MiniGamesPlugin.instance.logger.warning("Ошибка при планировании перезагрузки файла с участниками: ${t.message}")
                 }
-            }, MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
     }
 
     override fun close() {

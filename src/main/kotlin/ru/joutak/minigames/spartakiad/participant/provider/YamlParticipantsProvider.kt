@@ -69,7 +69,7 @@ class YamlParticipantsProvider(
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(yaml)
-            }, MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
         lastSavedAt = System.currentTimeMillis()
     }
 
@@ -93,7 +93,7 @@ class YamlParticipantsProvider(
                 saveToFile(yamlParticipants)
             }
         try {
-            future.get(MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
+            future.get(MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
         } catch (t: Throwable) {
             MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${t.message}")
             MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())

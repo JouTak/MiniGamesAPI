@@ -10,8 +10,8 @@ object ParticipantsListChangeListener : Listener {
     fun onParticipantsListChange(event: ParticipantsListChangeEvent) {
         MiniGamesPlugin.instance.logger.warning("Файл с участниками был изменен.")
         MiniGamesPlugin.instance
-            .getSpartakiadManager()
-            .getParticipantsManager()
+            .spartakiadManager
+            .participantsManager
             .reload()
     }
 }

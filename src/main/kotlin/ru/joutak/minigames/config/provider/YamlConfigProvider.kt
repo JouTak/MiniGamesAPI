@@ -76,7 +76,7 @@ class YamlConfigProvider(
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(yamlConfig)
-            }, MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
     }
 
     private fun saveToFile(yamlConfig: YamlConfiguration) {
@@ -96,7 +96,7 @@ class YamlConfigProvider(
                 saveToFile(yamlConfig)
             }
         try {
-            future.get(MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
+            future.get(MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
         } catch (t: Throwable) {
             MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${t.message}")
             MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())

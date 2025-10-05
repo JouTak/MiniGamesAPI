@@ -10,13 +10,13 @@ import ru.joutak.minigames.locale.Message
 object AsyncPlayerPreLoginListener : Listener {
     @EventHandler
     fun onAsyncPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
-        if (!MiniGamesPlugin.instance.getConfiguration().get(ConfigKeys.SPARTAKIAD_ENABLED)) {
+        if (!MiniGamesPlugin.instance.configuration.get(ConfigKeys.SPARTAKIAD_ENABLED)) {
             return
         }
 
         if (!MiniGamesPlugin.instance
-                .getSpartakiadManager()
-                .getParticipantsManager()
+                .spartakiadManager
+                .participantsManager
                 .contains(event.name)
         ) {
             event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST, Message.KICK_NON_PARTICIPANT)
@@ -46,6 +46,8 @@ object AsyncPlayerPreLoginListener : Listener {
                     uuid,
                     event.name,
                 ).join()
+                .spartakiadManager
+                .playerDataManager
 
         // MiniGamesPlugin.instance.logger.info(playerData.toString())
         // MiniGamesPlugin.instance.logger.warning(Thread.currentThread().name)

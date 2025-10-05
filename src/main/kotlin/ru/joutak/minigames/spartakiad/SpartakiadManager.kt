@@ -10,13 +10,13 @@ import java.lang.AutoCloseable
 import java.nio.file.Path
 
 class SpartakiadManager(
-    private val gameDataPath: Path,
-    private val playerDataProvider: PlayerDataStorage,
-    private val participantsProvider: ParticipantsProvider,
-    private val uuidResolver: UuidResolver,
+    val gameDataPath: Path,
+    playerDataProvider: PlayerDataStorage,
+    participantsProvider: ParticipantsProvider,
+    uuidResolver: UuidResolver,
 ) : AutoCloseable {
-    private val participantsManager = ParticipantsManager(participantsProvider, uuidResolver)
-    private val playerDataManager = PlayerDataManager(playerDataProvider)
+    val participantsManager = ParticipantsManager(participantsProvider)
+    val playerDataManager = PlayerDataManager(playerDataProvider, uuidResolver)
 
     init {
         participantsManager
