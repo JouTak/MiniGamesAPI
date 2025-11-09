@@ -4,7 +4,6 @@ import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bukkit.Bukkit
 import org.bukkit.World
 import org.bukkit.configuration.file.YamlConfiguration
-import org.bukkit.configuration.serialization.ConfigurationSerialization
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.mg.MiniGamesCommand
@@ -12,18 +11,20 @@ import ru.joutak.minigames.command.mg.StartCommand
 import ru.joutak.minigames.command.ready.ReadyCommand
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
-import ru.joutak.minigames.config.provider.YamlConfigProvider
-import ru.joutak.minigames.domain.PlayerData
+import ru.joutak.minigames.config.storage.YamlConfigStorage
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
-import ru.joutak.minigames.listener.ParticipantsListChangeListener
-import ru.joutak.minigames.listener.ParticipantsListReloadListener
+import ru.joutak.minigames.listener.WhitelistChangeListener
+import ru.joutak.minigames.listener.WhitelistReloadListener
 import ru.joutak.minigames.spartakiad.SpartakiadManager
-import ru.joutak.minigames.spartakiad.participant.provider.YamlParticipantsProvider
-import ru.joutak.minigames.spartakiad.playerData.storage.SqlitePlayerDataStorage
+import ru.joutak.minigames.spartakiad.participant.storage.SqliteParticipantStorage
+import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
+import ru.joutak.minigames.spartakiad.whitelist.storage.YamlTeamlistStorage
+import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import xyz.kyngs.librelogin.api.LibreLoginPlugin
 import xyz.kyngs.librelogin.api.provider.LibreLoginProvider
+import kotlin.io.path.createDirectories
 import kotlin.io.path.createParentDirectories
 import kotlin.io.path.exists
 import kotlin.io.path.name
@@ -57,7 +58,7 @@ class MiniGamesPlugin : JavaPlugin() {
     }
 
     private fun registerDomains() {
-        ConfigurationSerialization.registerClass(PlayerData::class.java, "PlayerData")
+        // ConfigurationSerialization.registerClass(Participant::class.java, "Participant")
     }
 
     private fun loadConfiguration() {
@@ -67,13 +68,14 @@ class MiniGamesPlugin : JavaPlugin() {
             saveResource(configPath.name, false)
         }
 
-        val configProvider = YamlConfigProvider(configPath.toFile())
-        configuration = Config(configProvider)
+        val configStorage = YamlConfigStorage(configPath.toFile())
+        configuration = Config(configStorage)
     }
 
     private fun loadDependencies() {
         if (configuration.get(ConfigKeys.USE_LIBRE_LOGIN)) {
-            val libreLoginProvider = Bukkit.getPluginManager().getPlugin("LibreLogin") as LibreLoginProvider<Player, World>?
+            val libreLoginProvider =
+                Bukkit.getPluginManager().getPlugin("LibreLogin") as LibreLoginProvider<Player, World>?
             if (libreLoginProvider == null) {
                 logger.severe("Не удалось получить доступ к API LibreLogin!")
                 server.pluginManager.disablePlugin(this)
@@ -86,16 +88,23 @@ class MiniGamesPlugin : JavaPlugin() {
         val minigameName = configuration.get(ConfigKeys.SPARTAKIAD_MINIGAME_NAME)
         val gameDataPath = dataPath.resolve(minigameName)
         if (!gameDataPath.exists()) {
-            gameDataPath.createParentDirectories()
+            gameDataPath.createDirectories()
         }
 
-        val participantsPath = dataPath.resolve("participants.yml")
-        if (!participantsPath.exists()) {
-            participantsPath.createParentDirectories()
-            YamlConfiguration().save(participantsPath.toFile())
-            logger.warning("Не найден файл с участниками ${participantsPath.name}! Создан файл с пустым списком.")
+        val whitelistStorage: WhitelistStorage
+        val whitelistPath = dataPath.resolve("whitelist.yml")
+        if (!whitelistPath.exists()) {
+            whitelistPath.createParentDirectories()
+            YamlConfiguration().save(whitelistPath.toFile())
+            logger.warning("Не найден файл с участниками ${whitelistPath.name}! Создан файл с пустым списком.")
         }
-        val participantsProvider = YamlParticipantsProvider(participantsPath.toFile())
+
+        whitelistStorage = if (configuration.get(ConfigKeys.SPARTAKIAD_TEAM_MODE)) {
+            YamlTeamlistStorage(whitelistPath.toFile())
+        } else {
+            YamlWhitelistStorage(whitelistPath.toFile())
+        }
+
         val uuidResolver =
             if (configuration.get(ConfigKeys.USE_LIBRE_LOGIN)) {
                 LibreLoginUuidResolver(libreLogin!!)
@@ -103,26 +112,26 @@ class MiniGamesPlugin : JavaPlugin() {
                 BukkitUuidResolver()
             }
 
-        val playerDataPath = gameDataPath.resolve("playerData.db")
-        if (!playerDataPath.exists()) {
-            playerDataPath.createParentDirectories()
-            logger.warning("Не найден файл с информацией об игроках ${playerDataPath.name}!")
+        val participantsPath = gameDataPath.resolve("participants.db")
+        if (!participantsPath.exists()) {
+            participantsPath.createParentDirectories()
+            logger.warning("Не найден файл с информацией об игроках ${participantsPath.name}!")
         }
-        val playerDataProvider = SqlitePlayerDataStorage(playerDataPath.toFile())
+        val participantStorage = SqliteParticipantStorage(participantsPath.toFile())
 
-        spartakiadManager = SpartakiadManager(gameDataPath, playerDataProvider, participantsProvider, uuidResolver)
+        spartakiadManager = SpartakiadManager(gameDataPath, participantStorage, whitelistStorage, uuidResolver)
     }
 
     private fun registerEvents() {
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, this)
-        Bukkit.getPluginManager().registerEvents(ParticipantsListReloadListener, this)
-        Bukkit.getPluginManager().registerEvents(ParticipantsListChangeListener, this)
+        Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, this)
+        Bukkit.getPluginManager().registerEvents(WhitelistChangeListener, this)
     }
 
     private fun registerCommands() {
         val readyCommand = ReadyCommand.getBuilder().build()
 
-        val spartaCommand =
+        val mainCommand =
             MiniGamesCommand
                 .getBuilder()
                 .then(StartCommand.getBuilder())
@@ -130,7 +139,7 @@ class MiniGamesPlugin : JavaPlugin() {
 
         this.lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { commands ->
             commands.registrar().register(readyCommand)
-            commands.registrar().register(spartaCommand)
+            commands.registrar().register(mainCommand)
         }
     }
 
@@ -138,7 +147,7 @@ class MiniGamesPlugin : JavaPlugin() {
      * Plugin shutdown logic
      */
     override fun onDisable() {
-        configuration.saveAndClose()
+        configuration.close()
         spartakiadManager.close()
     }
 }

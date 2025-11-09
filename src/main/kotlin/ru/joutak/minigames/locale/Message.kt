@@ -15,9 +15,10 @@ object Message {
 
     val KICK_NO_ATTEMPTS =
         LinearComponents.linear(
-            Component.text("К сожалению, для вас cпартакиада "),
-            Component.text("закончилась ", NamedTextColor.RED),
-            Component.text("☹"),
+            Component.text("☹ "),
+            Component.text("К сожалению, у вас "),
+            Component.text("закончились ", NamedTextColor.RED),
+            Component.text("попытки!"),
         )
 
     val KICK_WINNER =

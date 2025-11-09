@@ -1,28 +1,28 @@
 package ru.joutak.minigames.spartakiad
 
-import ru.joutak.minigames.spartakiad.participant.ParticipantsManager
-import ru.joutak.minigames.spartakiad.participant.provider.ParticipantsProvider
-import ru.joutak.minigames.spartakiad.playerData.PlayerDataManager
-import ru.joutak.minigames.spartakiad.playerData.storage.PlayerDataStorage
+import ru.joutak.minigames.spartakiad.participant.ParticipantManager
+import ru.joutak.minigames.spartakiad.participant.storage.ParticipantStorage
+import ru.joutak.minigames.spartakiad.whitelist.WhitelistManager
+import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
 import ru.joutak.minigames.util.uuid.UuidResolver
 import java.lang.AutoCloseable
 import java.nio.file.Path
 
 class SpartakiadManager(
     val gameDataPath: Path,
-    playerDataProvider: PlayerDataStorage,
-    participantsProvider: ParticipantsProvider,
+    playerDataProvider: ParticipantStorage,
+    whitelistStorage: WhitelistStorage,
     uuidResolver: UuidResolver,
 ) : AutoCloseable {
-    val participantsManager = ParticipantsManager(participantsProvider)
-    val playerDataManager = PlayerDataManager(playerDataProvider, uuidResolver)
+    val whitelistManager = WhitelistManager(whitelistStorage)
+    val participantManager = ParticipantManager(playerDataProvider, uuidResolver)
 
     init {
-        participantsManager.reload()
+        whitelistManager.reload()
     }
 
     override fun close() {
-        playerDataManager.close()
-        participantsManager.close()
+        participantManager.close()
+        whitelistManager.close()
     }
 }

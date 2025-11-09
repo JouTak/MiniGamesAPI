@@ -1,11 +1,11 @@
 package ru.joutak.minigames.config
 
 import ru.joutak.minigames.MiniGamesPlugin
-import ru.joutak.minigames.config.provider.ConfigProvider
+import ru.joutak.minigames.config.storage.ConfigStorage
 import java.util.concurrent.ConcurrentHashMap
 
 class Config(
-    private val provider: ConfigProvider,
+    private val configStorage: ConfigStorage,
 ) {
     private val values = ConcurrentHashMap<ConfigKey<*>, Any>()
 
@@ -14,28 +14,27 @@ class Config(
     }
 
     private fun load() {
-        for (key in ConfigKeys.getKeys()) {
+        for (key in ConfigKeys.getAll()) {
             val value =
-                if (!provider.contains(key.path)) {
+                if (!configStorage.contains(key.path)) {
                     MiniGamesPlugin.instance.logger.warning(
                         "Не найден ключ ${key.path} в конфиге! Взято стандартное значение: ${key.default}",
                     )
-                    provider.set(key.path, key.default)
+                    configStorage.set(key.path, key.default)
                     key.default
                 } else {
-                    provider.get(key.path)!!
+                    configStorage.get(key.path)!!
                 }
             values[key] = value
         }
     }
 
     fun save() {
-        provider.save(values)
+        configStorage.save(values)
     }
 
-    fun saveAndClose() {
-        save()
-        provider.close()
+    fun close() {
+        configStorage.close()
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -57,6 +56,6 @@ class Config(
     ) {
         key.validate(value)
         values[key] = value
-        provider.set(key.path, value)
+        configStorage.set(key.path, value)
     }
 }

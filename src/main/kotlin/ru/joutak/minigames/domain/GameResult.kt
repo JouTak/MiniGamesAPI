@@ -1,3 +1,3 @@
 package ru.joutak.minigames.domain
 
-class GameResult
+//data class GameResult()
