@@ -9,9 +9,9 @@ object ParticipantsListChangeListener : Listener {
     @EventHandler
     fun onParticipantsListChange(event: ParticipantsListChangeEvent) {
         MiniGamesPlugin.instance.logger.warning("Файл с участниками был изменен.")
-        MiniGamesPlugin.instance
-            .spartakiadManager
-            .participantsManager
-            .reload()
+//        MiniGamesPlugin.instance
+//            .spartakiadManager
+//            .participantManager
+//            .reload()
     }
 }
