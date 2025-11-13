@@ -15,7 +15,7 @@ object UnreadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>
             .executes { ctx ->
                 val executor = ctx.source.executor
                 if (executor !is Player) {
-                    ctx.source.sendFailure(Component.text("Only players can use this command"))
+                    ctx.source.sendFailure(Component.text("Только игроки могут использовать эту команду"))
                     return@executes Command.SINGLE_SUCCESS
                 }
 
