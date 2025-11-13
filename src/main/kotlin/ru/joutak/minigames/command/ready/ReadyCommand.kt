@@ -16,7 +16,9 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
             .executes { ctx ->
                 val executor = ctx.source.executor
                 if (executor !is Player) {
-                    ctx.source.sendFailure(Component.text("Только игроки могут использовать эту команду"))
+                    ctx.source.sender.sendMessage(
+                        Component.text("Только игроки могут использовать эту команду")
+                    )
                     return@executes Command.SINGLE_SUCCESS
                 }
 
@@ -32,3 +34,4 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                 Command.SINGLE_SUCCESS
             }
     }
+}
