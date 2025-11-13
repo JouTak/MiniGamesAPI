@@ -19,3 +19,4 @@ data class GameResultDto(
         winners: List<PlayerDto>,
         results: Map<UUID, Int>
     ) : this(gameUuid, gameName, participants, winners, LocalDateTime.now(), results)
+}
