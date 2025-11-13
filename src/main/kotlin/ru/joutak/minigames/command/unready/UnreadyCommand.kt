@@ -1,4 +1,4 @@
-package ru.joutak.minigames.command.ready
+package ru.joutak.minigames.command.unready
 
 import com.mojang.brigadier.Command
 import com.mojang.brigadier.builder.LiteralArgumentBuilder
@@ -9,24 +9,23 @@ import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.domain.GameQueue
 import net.kyori.adventure.text.Component
 
-// Команда /ready — добавляет игрока в очередь
-object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
+object UnreadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
     override fun getBuilder(): LiteralArgumentBuilder<CommandSourceStack> {
-        return Commands.literal("ready")
+        return Commands.literal("unready")
             .executes { ctx ->
                 val executor = ctx.source.executor
                 if (executor !is Player) {
-                    ctx.source.sendFailure(Component.text("Только игроки могут использовать эту команду"))
+                    ctx.source.sendFailure(Component.text("Only players can use this command"))
                     return@executes Command.SINGLE_SUCCESS
                 }
 
                 val playerDomain = GameQueue.getOrCreatePlayer(executor)
-                val added = GameQueue.addPlayer(playerDomain)
+                val removed = GameQueue.removePlayer(playerDomain)
 
-                if (added) {
-                    executor.sendMessage(Component.text("Вы добавлены в очередь!."))
+                if (removed) {
+                    executor.sendMessage(Component.text("Вы больше не в очереди."))
                 } else {
-                    executor.sendMessage(Component.text("Вы уже в очереди."))
+                    executor.sendMessage(Component.text("Вы не были в очереди."))
                 }
 
                 Command.SINGLE_SUCCESS
