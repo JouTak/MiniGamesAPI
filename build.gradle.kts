@@ -8,33 +8,26 @@ project.version = version
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.shadow)
+    kotlin("plugin.serialization") version libs.versions.kotlin.get()
 }
 
 repositories {
     mavenCentral()
-    maven("https://repo.papermc.io/repository/maven-public/") {
-        name = "papermc-repo"
-    }
-    maven("https://oss.sonatype.org/content/groups/public/") {
-        name = "sonatype"
-    }
-    maven("https://repo.kyngs.xyz/public") {
-        name = "libre-login-repo"
-    }
+    maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://oss.sonatype.org/content/groups/public/")
+    maven("https://repo.kyngs.xyz/public")
 }
 
 dependencies {
     compileOnly(libs.kotlin)
     compileOnly(libs.paper)
     compileOnly(libs.librelogin)
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 }
 
 kotlin {
-    jvmToolchain(
-        libs.versions.jdk
-            .get()
-            .toInt(),
-    )
+    jvmToolchain(libs.versions.jdk.get().toInt())
 }
 
 tasks.build {
@@ -46,34 +39,24 @@ tasks.jar {
 }
 
 tasks.processResources {
-    val minecraftVersion =
-        libs.versions.paper
-            .get()
-            .substringBefore("-")
-
+    val minecraftVersion = libs.versions.paper.get().substringBefore("-")
     val commitHash = project.findProperty("commitHash") as String?
 
     val website =
-        if (repo.isBlank()) {
-            "https://joutak.ru"
-        } else {
-            if (commitHash.isNullOrBlank()) repo else "$repo/tree/$commitHash"
-        }
+        if (repo.isBlank()) "https://joutak.ru"
+        else commitHash?.let { "$repo/tree/$it" } ?: repo
 
-    val props =
-        mapOf(
-            "NAME" to project.name,
-            "VERSION" to project.version,
-            "MINECRAFT_VERSION" to minecraftVersion,
-            "KOTLIN_VERSION" to libs.versions.kotlin.get(),
-            "WEBSITE" to website,
-        )
+    val props = mapOf(
+        "NAME" to project.name,
+        "VERSION" to project.version,
+        "MINECRAFT_VERSION" to minecraftVersion,
+        "KOTLIN_VERSION" to libs.versions.kotlin.get(),
+        "WEBSITE" to website,
+    )
 
     inputs.properties(props)
     filteringCharset = "UTF-8"
-    filesMatching("plugin.yml") {
-        expand(props)
-    }
+    filesMatching("plugin.yml") { expand(props) }
 }
 
 tasks.shadowJar {
@@ -82,7 +65,7 @@ tasks.shadowJar {
     if (System.getenv("TEST_PLUGIN_BUILD") != null) {
         val serverPath = System.getenv("SERVER_PATH")
         if (serverPath != null) {
-            destinationDirectory.set(file("$serverPath\\plugins"))
+            destinationDirectory.set(file("$serverPath/plugins"))
         } else {
             logger.warn("SERVER_PATH property is not set!")
         }
