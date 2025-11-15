@@ -1,22 +1,17 @@
 package ru.joutak.minigames.domain
 
-import java.util.concurrent.CopyOnWriteArraySet
+import kotlinx.serialization.Serializable
 
-class Team(val name: String, vararg players: Player) {
-    private val _members: MutableSet<Player> = CopyOnWriteArraySet<Player>()
-
-    val members: Set<Player>
-        get() = _members
-
-    init {
-        _members.addAll(players)
-    }
-
+@Serializable
+data class Team(
+    val name: String,
+    val members: MutableList<Player> = mutableListOf()
+) {
     fun add(player: Player) {
-        _members.add(player)
+        members.add(player)
     }
 
     fun remove(player: Player) {
-        _members.remove(player)
+        members.remove(player)
     }
 }

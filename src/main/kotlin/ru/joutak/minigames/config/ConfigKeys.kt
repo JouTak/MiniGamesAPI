@@ -10,6 +10,7 @@ object ConfigKeys {
     val USE_LIBRE_LOGIN = object : ConfigKey<Boolean>("uuid.use_libre_login", true) {}
     val STORAGE_DEBOUNCE_MILLIS = object : ConfigKey<Long>("storage.debounce_millis", 500) {}
     val STORAGE_CLOSE_TIMEOUT_MILLIS = object : ConfigKey<Long>("storage.close_timeout_millis", 5000) {}
+    val TEAM_PLAYER_FILE = object : ConfigKey<String>("teams.players_file", "teams.txt") {}
 
     fun register(key: ConfigKey<*>) {
         configKeys += key

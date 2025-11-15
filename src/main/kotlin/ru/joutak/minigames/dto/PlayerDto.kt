@@ -6,7 +6,7 @@ data class PlayerDto(
     val uuid: UUID?,
     val name: String,
     val teamName: String?,
-    val attemptsLeft: Int//сделать чтение из конфига
+    val attemptsLeft: Int//todo сделать чтение из конфига
 ) {
     constructor(name: String) : this(null, name, null, 1)
 
