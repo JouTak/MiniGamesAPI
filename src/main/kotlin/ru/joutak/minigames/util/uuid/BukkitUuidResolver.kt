@@ -1,7 +1,7 @@
 package ru.joutak.minigames.util.uuid
 
 import org.bukkit.Bukkit
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import java.util.UUID
 
 class BukkitUuidResolver : UuidResolver {
@@ -10,7 +10,7 @@ class BukkitUuidResolver : UuidResolver {
     override fun getName(uuid: UUID): String? {
         val player = Bukkit.getOfflinePlayer(uuid)
         if (player.name == null) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось получить ник участника с UUID $uuid!")
+            MiniGamesCore.plugin.logger.severe("Не удалось получить ник участника с UUID $uuid!")
         }
         return player.name
     }

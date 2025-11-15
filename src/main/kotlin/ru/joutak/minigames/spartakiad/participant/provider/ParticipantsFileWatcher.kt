@@ -1,7 +1,7 @@
 package ru.joutak.minigames.spartakiad.participant.provider
 
 import org.bukkit.Bukkit
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.event.ParticipantsListChangeEvent
 import java.io.File
@@ -51,15 +51,15 @@ class ParticipantsFileWatcher(
                             val context = event.context() as? Path ?: continue
                             if (context.name != participantsFile.name) continue
 
-                            MiniGamesPlugin.instance.logger.info("Обнаружено изменение вида $kind файла ${participantsFile.name}")
+                            MiniGamesCore.plugin.logger.info("Обнаружено изменение вида $kind файла ${participantsFile.name}")
 
                             val providerLastSaved = participantsProvider.getLastSavedAt()
                             val now = System.currentTimeMillis()
 
                             if (now - providerLastSaved <
-                                MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS) * 2
+                                MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS) * 2
                             ) {
-                                MiniGamesPlugin.instance.logger.warning(
+                                MiniGamesCore.plugin.logger.warning(
                                     "Событие изменение файла участников проигнорировано из-за недавнего сохранения файла плагином.",
                                 )
                                 break
@@ -70,9 +70,9 @@ class ParticipantsFileWatcher(
                         key.reset()
                     }
                 } catch (e: InterruptedException) {
-                    MiniGamesPlugin.instance.logger.warning("Поток ${Thread.currentThread().name} был прерван.")
+                    MiniGamesCore.plugin.logger.warning("Поток ${Thread.currentThread().name} был прерван.")
                 } catch (t: Throwable) {
-                    MiniGamesPlugin.instance.logger.warning("Ошибка в потоке ${Thread.currentThread().name}: ${t.message}")
+                    MiniGamesCore.plugin.logger.warning("Ошибка в потоке ${Thread.currentThread().name}: ${t.message}")
                 } finally {
                     try {
                         watchService.close()
@@ -90,16 +90,16 @@ class ParticipantsFileWatcher(
                 try {
                     participantsProvider.reload().thenRun {
                         Bukkit.getScheduler().runTask(
-                            MiniGamesPlugin.instance,
+                            MiniGamesCore.plugin,
                             Runnable {
                                 Bukkit.getPluginManager().callEvent(ParticipantsListChangeEvent())
                             },
                         )
                     }
                 } catch (t: Throwable) {
-                    MiniGamesPlugin.instance.logger.warning("Ошибка при планировании перезагрузки файла с участниками: ${t.message}")
+                    MiniGamesCore.plugin.logger.warning("Ошибка при планировании перезагрузки файла с участниками: ${t.message}")
                 }
-            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
     }
 
     override fun close() {
@@ -121,7 +121,7 @@ class ParticipantsFileWatcher(
                 scheduler.shutdownNow()
             }
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.fine("Ошибка выключения планировщика participants-watcher-scheduler: ${t.message}")
+            MiniGamesCore.plugin.logger.fine("Ошибка выключения планировщика participants-watcher-scheduler: ${t.message}")
             scheduler.shutdownNow()
         }
 

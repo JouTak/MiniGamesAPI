@@ -2,7 +2,7 @@ package ru.joutak.minigames.spartakiad.whitelist.storage
 
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.dto.PlayerDto
 import ru.joutak.minigames.event.WhitelistChangeEvent
@@ -28,9 +28,9 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
 
     private val whitelistFileWatcher: FileStorageWatcher = FileStorageWatcher(teamlistFile, this) {
         Bukkit.getScheduler().runTask(
-            MiniGamesPlugin.instance,
+            MiniGamesCore.plugin,
             Runnable {
-                Bukkit.getScheduler().runTask(MiniGamesPlugin.instance, Runnable {
+                Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
                     Bukkit.getPluginManager().callEvent(WhitelistChangeEvent())
                 })
             },
@@ -47,7 +47,7 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
     override fun getTeams(): Map<String, List<String>> {
         val teamlistYaml = teamlistRef.get()
         if (!teamlistYaml.contains(yamlKey)) {
-            MiniGamesPlugin.instance.logger.warning("Не найден ключ $yamlKey в файле с командами-участницами ${teamlistFile.name}!")
+            MiniGamesCore.plugin.logger.warning("Не найден ключ $yamlKey в файле с командами-участницами ${teamlistFile.name}!")
             return emptyMap()
         }
         val teamsSection = teamlistYaml.getConfigurationSection(yamlKey)!!
@@ -62,7 +62,7 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
     override fun getAll(): Set<String> {
         val whitelistYaml = teamlistRef.get()
         if (!whitelistYaml.contains(yamlKey)) {
-            MiniGamesPlugin.instance.logger.warning("Не найден ключ $yamlKey в файле с командами-участницами ${teamlistFile.name}!")
+            MiniGamesCore.plugin.logger.warning("Не найден ключ $yamlKey в файле с командами-участницами ${teamlistFile.name}!")
             return emptySet()
         }
         val teamsMap = getTeams()
@@ -118,7 +118,7 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(teamlistYaml)
-            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
         lastSavedAt = System.currentTimeMillis()
     }
 
@@ -127,8 +127,8 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
             teamlistYaml.save(teamlistFile)
             lastSavedAt = System.currentTimeMillis()
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список команд-участниц: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить список команд-участниц: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         }
     }
 
@@ -138,7 +138,7 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
                 val yamlParticipants = YamlConfiguration.loadConfiguration(teamlistFile)
                 teamlistRef.set(yamlParticipants)
             } catch (t: Throwable) {
-                MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл со списком команд-участниц: ${t.message}")
+                MiniGamesCore.plugin.logger.severe("Не удалось загрузить файл со списком команд-участниц: ${t.message}")
                 teamlistRef.set(YamlConfiguration())
             }
         }
@@ -156,12 +156,12 @@ class YamlTeamlistStorage(private val teamlistFile: File) : TeamlistStorage {
             }
         try {
             future.get(
-                MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS),
+                MiniGamesCore.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS),
                 TimeUnit.MILLISECONDS
             )
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список команд-участниц: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить список команд-участниц: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         } finally {
             executor.shutdown()
         }

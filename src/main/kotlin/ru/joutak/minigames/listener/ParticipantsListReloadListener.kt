@@ -2,12 +2,12 @@ package ru.joutak.minigames.listener
 
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.event.ParticipantsListReloadEvent
 
 object ParticipantsListReloadListener : Listener {
     @EventHandler
     fun onParticipantsListReload(event: ParticipantsListReloadEvent) {
-        MiniGamesPlugin.instance.logger.warning("Файл с участниками был перезагружен:\n${event.participants.joinToString("\n")}")
+        MiniGamesCore.plugin.logger.warning("Файл с участниками был перезагружен:\n${event.participants.joinToString("\n")}")
     }
 }

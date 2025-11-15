@@ -1,11 +1,11 @@
 package ru.joutak.minigames.spartakiad.playerData
 
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.domain.PlayerData
 import ru.joutak.minigames.spartakiad.playerData.storage.PlayerDataStorage
 import ru.joutak.minigames.util.uuid.UuidResolver
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.CompletableFuture
 
 class PlayerDataManager(
@@ -33,7 +33,7 @@ class PlayerDataManager(
             playerDataStorage.createIfNotExists(
                 uuid,
                 name,
-                MiniGamesPlugin.instance.configuration.get(ConfigKeys.SPARTAKIAD_ATTEMPTS),
+                MiniGamesCore.configuration.get(ConfigKeys.SPARTAKIAD_ATTEMPTS),
             )
         }
 

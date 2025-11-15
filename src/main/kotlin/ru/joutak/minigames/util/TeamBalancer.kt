@@ -1,6 +1,6 @@
 package ru.joutak.minigames.util
 
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.domain.Player
 import ru.joutak.minigames.domain.Team
@@ -28,10 +28,10 @@ object TeamBalancer {
      * teams.players_file: "teams.txt"
      */
     fun distributeAuto(teamCount: Int): List<Team> {
-        val config = MiniGamesPlugin.instance.configuration
+        val config = MiniGamesCore.configuration
         val fileName = config.get(ConfigKeys.TEAM_PLAYER_FILE)
 
-        val file = MiniGamesPlugin.instance.dataFolder
+        val file = MiniGamesCore.plugin.dataFolder
             .toPath()
             .resolve(fileName)
             .toFile()

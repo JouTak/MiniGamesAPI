@@ -1,7 +1,7 @@
 package ru.joutak.minigames.spartakiad.participant
 
 import org.bukkit.Bukkit
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.event.ParticipantsListReloadEvent
 import ru.joutak.minigames.spartakiad.participant.provider.ParticipantsProvider
 import java.util.concurrent.CompletableFuture
@@ -49,17 +49,17 @@ class ParticipantsManager(
                     try {
                         add(name)
                     } catch (e: IllegalArgumentException) {
-                        MiniGamesPlugin.instance.logger.warning("Не удалось добавить участника $name: ${e.message}")
+                        MiniGamesCore.plugin.logger.warning("Не удалось добавить участника $name: ${e.message}")
                     }
                 }
 
                 Bukkit.getScheduler().runTask(
-                    MiniGamesPlugin.instance,
+                    MiniGamesCore.plugin,
                     Runnable {
                         Bukkit.getPluginManager().callEvent(ParticipantsListReloadEvent(getAll()))
                     },
                 )
-                MiniGamesPlugin.instance.logger.info("Список участников был перезагружен!")
+                MiniGamesCore.plugin.logger.info("Список участников был перезагружен!")
             }
 
     override fun close() {

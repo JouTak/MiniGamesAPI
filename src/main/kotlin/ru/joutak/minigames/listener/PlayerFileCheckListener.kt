@@ -38,15 +38,15 @@ object PlayerFileCheckListener : Listener {
     fun onAsyncPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
         // Используем MiniGamesPlugin для конфигурации, если доступен
         val config = try {
-            ru.joutak.minigames.MiniGamesPlugin.instance.configuration
+            ru.joutak.minigames.MiniGamesCore.configuration
         } catch (e: Exception) {
             // Если MiniGamesPlugin не доступен, используем конфиг через API
-            MiniGamesAPI.getConfig()
+            MiniGamesAPI.config
         }
 
         val fileName = config.get(ConfigKeys.TEAM_PLAYER_FILE)
         val dataFolder = try {
-            ru.joutak.minigames.MiniGamesPlugin.instance.dataFolder
+            ru.joutak.minigames.MiniGamesCore.plugin.dataFolder
         } catch (e: Exception) {
             MiniGamesAPI.getDataFolder()
         }
