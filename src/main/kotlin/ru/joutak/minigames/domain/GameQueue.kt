@@ -1,39 +1,34 @@
 package ru.joutak.minigames.domain
 
 import org.bukkit.entity.Player as BukkitPlayer
+import java.util.UUID
 
 object GameQueue {
-    private val queue: MutableList<Player> = mutableListOf()
-    private val players: MutableMap<BukkitPlayer, Player> = mutableMapOf()
-    private val playerTeams: MutableMap<Player, Team> = mutableMapOf()
+    private val queue: MutableSet<UUID> = mutableSetOf()  // храним уникальные id игроков
+    private val players: MutableMap<UUID, BukkitPlayer> = mutableMapOf()
+    private val playerTeams: MutableMap<UUID, Team> = mutableMapOf()
 
-    fun getOrCreatePlayer(bukkitPlayer: BukkitPlayer): Player {
-        return players.getOrPut(bukkitPlayer) { Player(bukkitPlayer.name) }
+    fun addPlayer(player: BukkitPlayer): Boolean {
+        val added = queue.add(player.uniqueId)
+        players[player.uniqueId] = player
+        return added
     }
 
-    fun addPlayer(player: Player): Boolean {
-        return if (!queue.contains(player)) {
-            queue.add(player)
-            true
-        } else false
-    }
-
-    fun removePlayer(player: Player): Boolean {
-        queue.remove(player)
-        // Убираем игрока из команды
-        playerTeams[player]?.remove(player)
-        playerTeams.remove(player)
+    fun removePlayer(player: BukkitPlayer): Boolean {
+        queue.remove(player.uniqueId)
+        playerTeams[player.uniqueId]?.remove(player)
+        playerTeams.remove(player.uniqueId)
+        players.remove(player.uniqueId)
         return true
     }
 
-    fun assignPlayerToTeam(player: Player, team: Team) {
-        // Если игрок уже в другой команде, убираем его
-        playerTeams[player]?.remove(player)
-        playerTeams[player] = team
+    fun assignPlayerToTeam(player: BukkitPlayer, team: Team) {
+        playerTeams[player.uniqueId]?.remove(player)
+        playerTeams[player.uniqueId] = team
         team.add(player)
     }
 
-    fun getTeam(player: Player): Team? = playerTeams[player]
+    fun getTeam(player: BukkitPlayer): Team? = playerTeams[player.uniqueId]
 
-    fun getQueue(): List<Player> = queue.toList()
+    fun getQueue(): List<BukkitPlayer> = queue.mapNotNull { players[it] }
 }

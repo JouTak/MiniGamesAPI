@@ -1,17 +1,18 @@
 package ru.joutak.minigames.domain
 
-import kotlinx.serialization.Serializable
+import org.bukkit.entity.Player as BukkitPlayer
 
-@Serializable
 data class Team(
     val name: String,
-    val members: MutableList<Player> = mutableListOf()
+    val members: MutableList<BukkitPlayer> = mutableListOf()
 ) {
-    fun add(player: Player) {
-        members.add(player)
+    fun add(player: BukkitPlayer) {
+        if (!members.contains(player)) {
+            members.add(player)
+        }
     }
 
-    fun remove(player: Player) {
+    fun remove(player: BukkitPlayer) {
         members.remove(player)
     }
 }

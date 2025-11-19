@@ -5,6 +5,7 @@ import org.bukkit.entity.Player
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameInstanceConfig
+import ru.joutak.minigames.domain.GameQueue
 import ru.joutak.minigames.event.GameInstanceReadyEvent
 import java.util.ArrayDeque
 
@@ -24,10 +25,14 @@ object MatchmakingManager {
         }
     }
 
-    fun removePlayer(player: Player) {
+    fun removePlayer(player: Player): Boolean {
         for (instance in activeInstances) {
-            if (instance.removePlayer(player)) break
+            if (instance.removePlayer(player)) {
+                GameQueue.removePlayer(player)
+                return true
+            }
         }
+        return GameQueue.removePlayer(player)
     }
 
     private fun checkReady(instance: GameInstance) {
