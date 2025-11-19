@@ -16,37 +16,37 @@ import java.util.stream.Collectors
 object PlayerFileCheckListener : Listener {
 
     // Автоматическая регистрация при загрузке класса
-    init {
-        try {
-            // Ищем любой плагин, который зависит от нашей библиотеки
-            val plugins = Bukkit.getPluginManager().plugins
-            val dependentPlugin = plugins.find { plugin ->
-                plugin.description.depend.contains("MiniGamesAPI") ||
-                        plugin.description.softDepend.contains("MiniGamesAPI")
-            } as? JavaPlugin
-
-            if (dependentPlugin != null) {
-                Bukkit.getPluginManager().registerEvents(this, dependentPlugin)
-                dependentPlugin.logger.info("MiniGamesAPI PlayerFileCheckListener автоматически зарегистрирован")
-            }
-        } catch (e: Exception) {
-            // Молча игнорируем, если не можем авто-зарегистрироваться
-        }
-    }
+//    init {
+//        try {
+//            // Ищем любой плагин, который зависит от нашей библиотеки
+//            val plugins = Bukkit.getPluginManager().plugins
+//            val dependentPlugin = plugins.find { plugin ->
+//                plugin.description.depend.contains("MiniGamesAPI") ||
+//                        plugin.description.softDepend.contains("MiniGamesAPI")
+//            } as? JavaPlugin
+//
+//            if (dependentPlugin != null) {
+//                Bukkit.getPluginManager().registerEvents(this, dependentPlugin)
+//                dependentPlugin.logger.info("MiniGamesAPI PlayerFileCheckListener автоматически зарегистрирован")
+//            }
+//        } catch (e: Exception) {
+//            // Молча игнорируем, если не можем авто-зарегистрироваться
+//        }
+//    }
 
     @EventHandler
     fun onAsyncPlayerPreLogin(event: AsyncPlayerPreLoginEvent) {
         // Используем MiniGamesPlugin для конфигурации, если доступен
         val config = try {
-            ru.joutak.minigames.MiniGamesPlugin.instance.configuration
+            ru.joutak.minigames.MiniGamesCore.configuration
         } catch (e: Exception) {
             // Если MiniGamesPlugin не доступен, используем конфиг через API
-            MiniGamesAPI.getConfig()
+            MiniGamesAPI.config
         }
 
         val fileName = config.get(ConfigKeys.TEAM_PLAYER_FILE)
         val dataFolder = try {
-            ru.joutak.minigames.MiniGamesPlugin.instance.dataFolder
+            ru.joutak.minigames.MiniGamesCore.plugin.dataFolder
         } catch (e: Exception) {
             MiniGamesAPI.getDataFolder()
         }

@@ -1,7 +1,7 @@
 package ru.joutak.minigames.config.provider
 
 import org.bukkit.configuration.file.YamlConfiguration
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKey
 import ru.joutak.minigames.config.ConfigKeys
 import java.io.File
@@ -33,7 +33,7 @@ class YamlConfigProvider(
                     configRef.set(yamlParticipants)
                     // Bukkit.getPluginManager().callEvent(FileReloadedEvent(getAll()))
                 } catch (t: Throwable) {
-                    MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл с конфигом: ${t.message}")
+                    MiniGamesCore.plugin.logger.severe("Не удалось загрузить файл с конфигом: ${t.message}")
                     configRef.set(YamlConfiguration())
                 }
             }
@@ -76,15 +76,15 @@ class YamlConfigProvider(
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(yamlConfig)
-            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
     }
 
     private fun saveToFile(yamlConfig: YamlConfiguration) {
         try {
             yamlConfig.save(configFile)
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить конфиг: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         }
     }
 
@@ -96,10 +96,10 @@ class YamlConfigProvider(
                 saveToFile(yamlConfig)
             }
         try {
-            future.get(MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
+            future.get(MiniGamesCore.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить конфиг: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить конфиг: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         } finally {
             executor.shutdown()
         }

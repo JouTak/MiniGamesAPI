@@ -1,6 +1,6 @@
 package ru.joutak.minigames.storage
 
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import java.io.Closeable
 import java.io.File
@@ -52,15 +52,15 @@ class FileStorageWatcher(
                             val context = event.context() as? Path ?: continue
                             if (context.name != file.name) continue
 
-                            MiniGamesPlugin.instance.logger.info("Обнаружено изменение вида $kind файла ${file.name}")
+                            MiniGamesCore.plugin.logger.info("Обнаружено изменение вида $kind файла ${file.name}")
 
                             val lastSaved = reloadableStorage.getLastSavedAt()
                             val now = System.currentTimeMillis()
 
                             if (now - lastSaved <
-                                MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS) * 2
+                                MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS) * 2
                             ) {
-                                MiniGamesPlugin.instance.logger.warning(
+                                MiniGamesCore.plugin.logger.warning(
                                     "Событие изменение файла ${file.name} проигнорировано из-за недавнего сохранения файла плагином.",
                                 )
                                 break
@@ -71,9 +71,9 @@ class FileStorageWatcher(
                         key.reset()
                     }
                 } catch (_: InterruptedException) {
-                    MiniGamesPlugin.instance.logger.warning("Поток ${Thread.currentThread().name} был прерван.")
+                    MiniGamesCore.plugin.logger.warning("Поток ${Thread.currentThread().name} был прерван.")
                 } catch (t: Throwable) {
-                    MiniGamesPlugin.instance.logger.warning("Ошибка в потоке ${Thread.currentThread().name}: ${t.message}")
+                    MiniGamesCore.plugin.logger.warning("Ошибка в потоке ${Thread.currentThread().name}: ${t.message}")
                 } finally {
                     try {
                         watchService.close()
@@ -90,11 +90,11 @@ class FileStorageWatcher(
             scheduler.schedule(
                 {
                     reloadableStorage.reload().thenRun(onReload).exceptionally { t ->
-                        MiniGamesPlugin.instance.logger.warning("Ошибка при планировании перезагрузки файла ${file.name}: ${t.message}")
+                        MiniGamesCore.plugin.logger.warning("Ошибка при планировании перезагрузки файла ${file.name}: ${t.message}")
                         return@exceptionally null
                     }
                 },
-                MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS),
+                MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS),
                 TimeUnit.MILLISECONDS
             )
     }
@@ -118,7 +118,7 @@ class FileStorageWatcher(
                 scheduler.shutdownNow()
             }
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.fine("Ошибка выключения планировщика ${file.nameWithoutExtension}-file-watcher: ${t.message}")
+            MiniGamesCore.plugin.logger.fine("Ошибка выключения планировщика ${file.nameWithoutExtension}-file-watcher: ${t.message}")
             scheduler.shutdownNow()
         }
 

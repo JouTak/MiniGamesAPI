@@ -1,7 +1,7 @@
 package ru.joutak.minigames.spartakiad.whitelist
 
 import org.bukkit.Bukkit
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.dto.PlayerDto
 import ru.joutak.minigames.event.WhitelistReloadEvent
 import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
@@ -56,12 +56,12 @@ class WhitelistManager(
                 whitelist.addAll(whitelistStorage.getAll())
 
                 Bukkit.getScheduler().runTask(
-                    MiniGamesPlugin.instance,
+                    MiniGamesCore.plugin,
                     Runnable {
                         Bukkit.getPluginManager().callEvent(WhitelistReloadEvent(getAll()))
                     },
                 )
-                MiniGamesPlugin.instance.logger.info("Список участников был перезагружен!")
+                MiniGamesCore.plugin.logger.info("Список участников был перезагружен!")
             }
 
     override fun close() {

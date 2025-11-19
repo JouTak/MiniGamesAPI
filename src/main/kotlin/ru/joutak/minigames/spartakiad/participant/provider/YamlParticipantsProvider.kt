@@ -1,7 +1,7 @@
 package ru.joutak.minigames.spartakiad.participant.provider
 
 import org.bukkit.configuration.file.YamlConfiguration
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import java.io.File
 import java.util.concurrent.CompletableFuture
@@ -36,7 +36,7 @@ class YamlParticipantsProvider(
     override fun getAll(): List<String> {
         val yamlParticipants = participantsRef.get()
         if (!yamlParticipants.contains(key)) {
-            MiniGamesPlugin.instance.logger.warning("Не найден ключ $key в файле с участниками ${participantsFile.name}!")
+            MiniGamesCore.plugin.logger.warning("Не найден ключ $key в файле с участниками ${participantsFile.name}!")
             return emptyList()
         }
         return yamlParticipants.getStringList(key).map { it.trim() }.filter { it.isNotBlank() }
@@ -88,7 +88,7 @@ class YamlParticipantsProvider(
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(yaml)
-            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
         lastSavedAt = System.currentTimeMillis()
     }
 
@@ -97,8 +97,8 @@ class YamlParticipantsProvider(
             yaml.save(participantsFile)
             lastSavedAt = System.currentTimeMillis()
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить список участников: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         }
     }
 
@@ -108,7 +108,7 @@ class YamlParticipantsProvider(
                 val yamlParticipants = YamlConfiguration.loadConfiguration(participantsFile)
                 participantsRef.set(yamlParticipants)
             } catch (t: Throwable) {
-                MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл со списком участников: ${t.message}")
+                MiniGamesCore.plugin.logger.severe("Не удалось загрузить файл со списком участников: ${t.message}")
                 participantsRef.set(YamlConfiguration())
             }
         }
@@ -123,10 +123,10 @@ class YamlParticipantsProvider(
                 saveToFile(yamlParticipants)
             }
         try {
-            future.get(MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
+            future.get(MiniGamesCore.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS), TimeUnit.MILLISECONDS)
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить список участников: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         } finally {
             executor.shutdown()
         }

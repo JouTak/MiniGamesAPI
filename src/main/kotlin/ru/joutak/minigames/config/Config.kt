@@ -1,6 +1,7 @@
 package ru.joutak.minigames.config
 
-import ru.joutak.minigames.MiniGamesPlugin
+
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.storage.ConfigStorage
 import java.util.concurrent.ConcurrentHashMap
 
@@ -17,7 +18,7 @@ class Config(
         for (key in ConfigKeys.getAll()) {
             val value =
                 if (!configStorage.contains(key.path)) {
-                    MiniGamesPlugin.instance.logger.warning(
+                    MiniGamesCore.plugin.logger.warning(
                         "Не найден ключ ${key.path} в конфиге! Взято стандартное значение: ${key.default}",
                     )
                     configStorage.set(key.path, key.default)
@@ -41,7 +42,7 @@ class Config(
     fun <T : Any> get(key: ConfigKey<T>): T {
         val value = values[key] as? T
         if (value == null) {
-            MiniGamesPlugin.instance.logger.warning(
+            MiniGamesCore.plugin.logger.warning(
                 "Не удалось получить значение ключа $key из конфига! Взято стандартное значение: ${key.default}",
             )
             return key.default

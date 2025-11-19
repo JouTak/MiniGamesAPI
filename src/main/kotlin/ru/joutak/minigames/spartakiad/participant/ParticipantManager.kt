@@ -1,6 +1,6 @@
 package ru.joutak.minigames.spartakiad.participant
 
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.domain.Participant
 import ru.joutak.minigames.spartakiad.participant.storage.ParticipantStorage
@@ -33,7 +33,7 @@ class ParticipantManager(
             participantStorage.createIfNotExists(
                 uuid,
                 name,
-                MiniGamesPlugin.instance.configuration.get(ConfigKeys.SPARTAKIAD_ATTEMPTS),
+                MiniGamesCore.configuration.get(ConfigKeys.SPARTAKIAD_ATTEMPTS),
             )
         }
 

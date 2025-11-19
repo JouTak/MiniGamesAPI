@@ -1,6 +1,6 @@
 package ru.joutak.minigames.spartakiad.playerData.storage
 
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.domain.PlayerData
 import java.io.File
 import java.sql.Connection
@@ -104,15 +104,15 @@ class SqlitePlayerDataStorage(
                 markWonSync(uuid)
             }, executor)
             .exceptionally { t ->
-                MiniGamesPlugin.instance.logger.severe("Не удалось изменить данные игрока с UUID $uuid: ${t.message}")
-                MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+                MiniGamesCore.plugin.logger.severe("Не удалось изменить данные игрока с UUID $uuid: ${t.message}")
+                MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
                 return@exceptionally null
             }.thenApply { }
 
     override fun hasWon(uuid: UUID): CompletableFuture<Boolean> =
         CompletableFuture.supplyAsync({ hasWonSync(uuid) }, executor).exceptionally { t ->
-            MiniGamesPlugin.instance.logger.severe("Не удалось получить данные игрока с UUID $uuid: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось получить данные игрока с UUID $uuid: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
             return@exceptionally null
         }
 
@@ -226,13 +226,13 @@ class SqlitePlayerDataStorage(
         try {
             executor.shutdownNow()
         } catch (e: Exception) {
-            MiniGamesPlugin.instance.logger.warning("Не удалось закрыть выполняющий запросы к БД SQLite поток: ${e.message}")
+            MiniGamesCore.plugin.logger.warning("Не удалось закрыть выполняющий запросы к БД SQLite поток: ${e.message}")
         }
 
         try {
             connection.close()
         } catch (e: Exception) {
-            MiniGamesPlugin.instance.logger.warning("Не удалось закрыть соединение БД SQLite с информацией об игроках: ${e.message}")
+            MiniGamesCore.plugin.logger.warning("Не удалось закрыть соединение БД SQLite с информацией об игроках: ${e.message}")
         }
     }
 }

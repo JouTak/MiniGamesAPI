@@ -2,7 +2,7 @@ package ru.joutak.minigames.spartakiad.whitelist.storage
 
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
-import ru.joutak.minigames.MiniGamesPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.dto.PlayerDto
 import ru.joutak.minigames.event.WhitelistChangeEvent
@@ -28,9 +28,9 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
 
     private val whitelistFileWatcher: FileStorageWatcher = FileStorageWatcher(whitelistFile, this) {
         Bukkit.getScheduler().runTask(
-            MiniGamesPlugin.instance,
+            MiniGamesCore.plugin,
             Runnable {
-                Bukkit.getScheduler().runTask(MiniGamesPlugin.instance, Runnable {
+                Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
                     Bukkit.getPluginManager().callEvent(WhitelistChangeEvent())
                 })
             },
@@ -47,7 +47,7 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
     override fun getAll(): Set<String> {
         val whitelistYaml = whitelistRef.get()
         if (!whitelistYaml.contains(yamlKey)) {
-            MiniGamesPlugin.instance.logger.warning("Не найден ключ $yamlKey в файле с участниками ${whitelistFile.name}!")
+            MiniGamesCore.plugin.logger.warning("Не найден ключ $yamlKey в файле с участниками ${whitelistFile.name}!")
             return emptySet()
         }
 
@@ -90,7 +90,7 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
         pendingSaveFuture =
             executor.schedule({
                 saveToFile(whitelistYaml)
-            }, MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
+            }, MiniGamesCore.configuration.get(ConfigKeys.STORAGE_DEBOUNCE_MILLIS), TimeUnit.MILLISECONDS)
         lastSavedAt = System.currentTimeMillis()
     }
 
@@ -99,8 +99,8 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
             whitelistYaml.save(whitelistFile)
             lastSavedAt = System.currentTimeMillis()
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить список участников: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         }
     }
 
@@ -110,7 +110,7 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
                 val yamlParticipants = YamlConfiguration.loadConfiguration(whitelistFile)
                 whitelistRef.set(yamlParticipants)
             } catch (t: Throwable) {
-                MiniGamesPlugin.instance.logger.severe("Не удалось загрузить файл со списком участников: ${t.message}")
+                MiniGamesCore.plugin.logger.severe("Не удалось загрузить файл со списком участников: ${t.message}")
                 whitelistRef.set(YamlConfiguration())
             }
         }
@@ -128,12 +128,12 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
             }
         try {
             future.get(
-                MiniGamesPlugin.instance.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS),
+                MiniGamesCore.configuration.get(ConfigKeys.STORAGE_CLOSE_TIMEOUT_MILLIS),
                 TimeUnit.MILLISECONDS
             )
         } catch (t: Throwable) {
-            MiniGamesPlugin.instance.logger.severe("Не удалось сохранить список участников: ${t.message}")
-            MiniGamesPlugin.instance.logger.severe(t.stackTraceToString())
+            MiniGamesCore.plugin.logger.severe("Не удалось сохранить список участников: ${t.message}")
+            MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
         } finally {
             executor.shutdown()
         }
