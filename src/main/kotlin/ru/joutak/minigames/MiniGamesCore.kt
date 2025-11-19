@@ -22,10 +22,9 @@ import ru.joutak.minigames.spartakiad.whitelist.storage.YamlTeamlistStorage
 import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
-import xyz.kyngs.librelogin.api.LibreLoginPlugin
-import xyz.kyngs.librelogin.api.provider.LibreLoginProvider
-import kotlin.io.path.*
+import ru.joutak.minigames.util.uuid.UuidResolver
 import java.nio.file.Path
+import kotlin.io.path.*
 
 object MiniGamesCore {
 
@@ -36,8 +35,13 @@ object MiniGamesCore {
 
     lateinit var plugin: JavaPlugin
 
+    // Динамически загружаемый LibreLogin
+    private var libreLogin: Any? = null
+
     fun initialize(plugin: JavaPlugin) {
         this.plugin = plugin
+
+        plugin.logger.info("=== MiniGamesCore.initialize() START ===")
 
         loadConfiguration()
         loadDependencies()
@@ -47,57 +51,115 @@ object MiniGamesCore {
 
         MiniGamesAPI.initialize(plugin, configuration)
         plugin.logger.info("MiniGamesAPI встроена как библиотека")
+
+        plugin.logger.info("=== MiniGamesCore.initialize() END ===")
     }
 
     private val dataPath: Path
         get() = plugin.dataFolder.toPath()
 
-    private var libreLogin: LibreLoginPlugin<Player, World>? = null
-
     private fun loadConfiguration() {
+        plugin.logger.info("Loading config...")
+
         val configPath = dataPath.resolve("config.yml")
+        plugin.logger.info("Config path: $configPath (exists=${configPath.exists()})")
+
         if (!configPath.exists()) {
+            plugin.logger.info("Config.yml not found, saving default...")
             plugin.saveResource("config.yml", false)
         }
 
         val storage = YamlConfigStorage(configPath.toFile())
         configuration = Config(storage)
+
+        plugin.logger.info("Config loaded successfully.")
     }
 
     private fun loadDependencies() {
-        if (configuration.get(ConfigKeys.USE_LIBRE_LOGIN)) {
-            val provider = Bukkit.getPluginManager()
-                .getPlugin("LibreLogin") as? LibreLoginProvider<Player, World>
+        val useLL = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
+        plugin.logger.info("LibreLogin enabled in config: $useLL")
 
-            libreLogin = provider?.libreLogin
+        if (!useLL) {
+            plugin.logger.info("LibreLogin disabled. Skipping.")
+            return
+        }
+
+        try {
+            val providerClass = Class.forName("xyz.kyngs.librelogin.api.provider.LibreLoginProvider")
+            val getInstance = providerClass.getMethod("getInstance")
+            val provider = getInstance.invoke(null)
+
+            val getLibreLogin = providerClass.getMethod("getLibreLogin")
+            libreLogin = getLibreLogin.invoke(provider)
+
+            plugin.logger.info("Successfully loaded LibreLogin dynamically: $libreLogin")
+
+        } catch (_: ClassNotFoundException) {
+            plugin.logger.severe("LibreLogin not found! Disabling LibreLogin integration.")
+            libreLogin = null
+        } catch (e: Exception) {
+            plugin.logger.severe("Failed to load LibreLogin dynamically: $e")
+            libreLogin = null
         }
     }
 
     private fun initSpartakiadManager() {
+        plugin.logger.info("=== initSpartakiadManager() ===")
+
         val minigameName = configuration.get(ConfigKeys.SPARTAKIAD_MINIGAME_NAME)
-        val gamePath = dataPath.resolve(minigameName).apply { toFile().mkdirs() }
+        plugin.logger.info("minigameName = $minigameName")
+
+        val gamePath = dataPath.resolve(minigameName)
+        plugin.logger.info("gamePath = $gamePath")
+
+        gamePath.toFile().mkdirs()
+        plugin.logger.info("gamePath.mkdir() done")
 
         val whitelistPath = dataPath.resolve("whitelist.yml")
+        plugin.logger.info("whitelistPath = $whitelistPath (exists=${whitelistPath.exists()})")
+
         if (!whitelistPath.exists()) {
+            plugin.logger.info("whitelist.yml not found, creating empty...")
             YamlConfiguration().save(whitelistPath.toFile())
         }
 
+        val teamMode = configuration.get(ConfigKeys.SPARTAKIAD_TEAM_MODE)
+        plugin.logger.info("team_mode = $teamMode")
+
         val whitelistStorage: WhitelistStorage =
-            if (configuration.get(ConfigKeys.SPARTAKIAD_TEAM_MODE)) {
+            if (teamMode) {
+                plugin.logger.info("Using YamlTeamlistStorage")
                 YamlTeamlistStorage(whitelistPath.toFile())
             } else {
+                plugin.logger.info("Using YamlWhitelistStorage")
                 YamlWhitelistStorage(whitelistPath.toFile())
             }
 
-        val uuidResolver =
-            if (configuration.get(ConfigKeys.USE_LIBRE_LOGIN)) {
-                LibreLoginUuidResolver(libreLogin!!)
+        val usingLibreLogin = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
+        plugin.logger.info("use_libre_login = $usingLibreLogin")
+        plugin.logger.info("libreLogin = $libreLogin")
+
+        val uuidResolver: UuidResolver =
+            if (usingLibreLogin && libreLogin != null) {
+                plugin.logger.info("Creating LibreLoginUuidResolver (reflection)")
+                try {
+                    val ctor = LibreLoginUuidResolver::class.java.getConstructor(Any::class.java)
+                    ctor.newInstance(libreLogin) as UuidResolver
+                } catch (e: Exception) {
+                    plugin.logger.severe("Failed to create LibreLoginUuidResolver: $e")
+                    BukkitUuidResolver()
+                }
             } else {
+                plugin.logger.info("Creating BukkitUuidResolver (LL disabled or missing)")
                 BukkitUuidResolver()
             }
 
+
         val dbFile = gamePath.resolve("participants.db").toFile()
+        plugin.logger.info("participants.db = ${dbFile.absolutePath}")
+
         val participantStorage = SqliteParticipantStorage(dbFile)
+        plugin.logger.info("SqliteParticipantStorage created.")
 
         spartakiadManager =
             SpartakiadManager(
@@ -106,15 +168,23 @@ object MiniGamesCore {
                 whitelistStorage,
                 uuidResolver
             )
+
+        plugin.logger.info("SpartakiadManager created successfully!")
     }
 
     private fun registerEvents() {
+        plugin.logger.info("Registering events...")
+
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistChangeListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, plugin)
+
+        plugin.logger.info("Events registered.")
     }
 
     private fun registerCommands() {
+        plugin.logger.info("Registering commands...")
+
         val readyCmd = ReadyCommand.getBuilder().build()
         val mgCmd = MiniGamesCommand.getBuilder().then(StartCommand.getBuilder()).build()
 
@@ -122,9 +192,13 @@ object MiniGamesCore {
             event.registrar().register(readyCmd)
             event.registrar().register(mgCmd)
         }
+
+        plugin.logger.info("Commands registered.")
     }
 
     fun shutdown() {
+        plugin.logger.info("MiniGamesCore.shutdown()")
+
         configuration.close()
         spartakiadManager.close()
     }
