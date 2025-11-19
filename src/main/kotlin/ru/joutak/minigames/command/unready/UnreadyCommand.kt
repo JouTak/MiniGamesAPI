@@ -10,16 +10,24 @@ import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.managers.MatchmakingManager
 
 object UnreadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
+
     override fun getBuilder(): LiteralArgumentBuilder<CommandSourceStack> {
         return Commands.literal("unready")
             .executes { ctx ->
                 val executor = ctx.source.executor as? Player ?: run {
-                    ctx.source.sender.sendMessage(Component.text("Только игроки могут использовать эту команду"))
+                    ctx.source.sender.sendMessage(
+                        Component.text("Только игроки могут использовать эту команду")
+                    )
                     return@executes Command.SINGLE_SUCCESS
                 }
 
-                MatchmakingManager.removePlayer(executor)
-                executor.sendMessage(Component.text("Вы больше не в очереди."))
+                val removed = MatchmakingManager.removePlayer(executor)
+                if (removed) {
+                    executor.sendMessage(Component.text("Вы больше не в очереди."))
+                } else {
+                    executor.sendMessage(Component.text("Вы не были в очереди."))
+                }
+
                 Command.SINGLE_SUCCESS
             }
     }
