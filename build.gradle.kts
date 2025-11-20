@@ -75,7 +75,7 @@ tasks.shadowJar {
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            artifact(tasks.shadowJar.get().archiveFile.get().asFile)
+            artifact(tasks.shadowJar)  // публикуем shadowJar
             groupId = project.group.toString()
             artifactId = "minigamesapi"
             version = "${project.version}-SNAPSHOT"
