@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.shadow)
     kotlin("plugin.serialization") version libs.versions.kotlin.get()
+    `maven-publish`  // добавлен плагин
 }
 
 repositories {
@@ -68,6 +69,29 @@ tasks.shadowJar {
             destinationDirectory.set(file("$serverPath/plugins"))
         } else {
             logger.warn("SERVER_PATH property is not set!")
+        }
+    }
+}
+
+// === Публикация в GitHub Packages ===
+publishing {
+    publications {
+        create<MavenPublication>("maven") {
+            from(components["java"])
+            groupId = project.group.toString()
+            artifactId = project.name.lowercase()
+            version = project.version.toString()
+        }
+    }
+
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/JouTak/MiniGamesAPI")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
         }
     }
 }
