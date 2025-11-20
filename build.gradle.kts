@@ -1,10 +1,22 @@
 val group: String by project
 val version: String by project
 val repo: String by project
+val isRelease = project.findProperty("isRelease") == "true"
+val commitHash = project.findProperty("commitHash") as String?
+
+val calculatedVersion = if (isRelease) {
+    version
+} else {
+    val suffix = buildNumber ?: "LOCAL"
+    "$baseVersion-$suffix"
+}
 
 project.group = group
-project.version = version
-
+project.version = calculatedVersion
+// PR to master: plugin-1.0.0.jar -> releases repo
+// Commit: plugin-1.0.0-{jobNumber}.jar -> snapshots repo
+// [Release] Build: plugin-1.0.0.jar
+// [Snapshot] Build: -> plugin-1.0.0-LOCAL.jar
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.shadow)
@@ -40,7 +52,6 @@ tasks.jar {
 
 tasks.processResources {
     val minecraftVersion = libs.versions.paper.get().substringBefore("-")
-    val commitHash = project.findProperty("commitHash") as String?
 
     val website = if (repo.isBlank()) "https://joutak.ru"
     else commitHash?.let { "$repo/tree/$it" } ?: repo
@@ -91,7 +102,7 @@ publishing {
             name = "Reposilite"
             val repoUrl = "https://maven.joutak.ru"
 
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) "$repoUrl/snapshots" else "$repoUrl/releases")
+            url = uri(if (isRelease) "$repoUrl/releases" else "$repoUrl/snapshots")
 
             credentials {
                 username = System.getenv("REPOSILITE_USER")
