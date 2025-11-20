@@ -10,7 +10,7 @@ val calculatedVersion = if (isRelease) {
     version
 } else {
     val suffix = buildNumber ?: "LOCAL"
-    "$baseVersion-$suffix"
+    "$version-$suffix"
 }
 
 project.version = calculatedVersion
