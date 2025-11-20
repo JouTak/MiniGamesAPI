@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.Material
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.format.TextDecoration
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameQueue // <-- Необходимый импорт
@@ -40,7 +41,7 @@ object TeamSelectionGui : Listener {
 
     fun open(player: Player, instance: GameInstance, callback: (Player, Int) -> Unit) {
         val size = ((instance.teams.size - 1) / 9 + 1) * 9
-        val inventory = Bukkit.createInventory(null, size, Component.text("Выбор команды", NamedTextColor.BLACK))
+        val inventory = Bukkit.createInventory(null, size, Component.text("Выбор команды", NamedTextColor.DARK_GRAY))
 
         instance.teams.forEachIndexed { index, team ->
             val material = TEAM_MATERIALS[index] ?: Material.WHITE_WOOL
@@ -51,12 +52,24 @@ object TeamSelectionGui : Listener {
             val currentPlayers = team.size
             val maxPlayers = instance.config.playersPerTeam
 
+            val playerNames = team.map { Component.text("- ${it.name}", NamedTextColor.GRAY) }
+
+            val loreList = mutableListOf<Component>()
+
             val color = if (currentPlayers < maxPlayers) NamedTextColor.GREEN else NamedTextColor.RED
-            meta.displayName(Component.text("Команда ${index + 1}", color))
-            meta.lore(listOf(
-                Component.empty(),
-                Component.text("Игроков: $currentPlayers/$maxPlayers", NamedTextColor.GRAY)
-            ))
+            loreList.add(Component.text("Игроков: $currentPlayers/$maxPlayers", color))
+
+            loreList.add(Component.empty())
+
+            if (currentPlayers > 0) {
+                loreList.add(Component.text("Состав команды:", NamedTextColor.AQUA).decorate(TextDecoration.BOLD))
+                loreList.addAll(playerNames)
+            } else {
+                loreList.add(Component.text("Команда пуста", NamedTextColor.GRAY))
+            }
+
+            meta.displayName(Component.text("Команда ${index + 1}", NamedTextColor.WHITE).decorate(TextDecoration.BOLD))
+            meta.lore(loreList)
 
             item.itemMeta = meta
             inventory.setItem(index, item)
@@ -81,6 +94,7 @@ object TeamSelectionGui : Listener {
         if (slot >= data.instance.teams.size) return
 
         data.callback(player, slot)
+        player.closeInventory()
     }
 
     @EventHandler
