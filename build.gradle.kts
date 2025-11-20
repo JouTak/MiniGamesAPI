@@ -61,6 +61,12 @@ tasks.processResources {
 tasks.shadowJar {
     archiveFileName.set("${project.name}-${project.version}.jar")
 
+    // we do NOT want him here
+    dependencies {
+        exclude(dependency("org.jetbrains.kotlin:.*"))
+        exclude(dependency("org.jetbrains:annotations"))
+    }
+
     if (System.getenv("TEST_PLUGIN_BUILD") != null) {
         val serverPath = System.getenv("SERVER_PATH")
         if (serverPath != null) {
@@ -71,24 +77,28 @@ tasks.shadowJar {
     }
 }
 
-// === Публикация в GitHub Packages ===
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            from(components["java"])
+            artifact(tasks.shadowJar)
             groupId = project.group.toString()
-            artifactId = "minigamesapi"                  // фиксируем, чтобы не менялось
-            version = "${project.version}-SNAPSHOT"       // SNAPSHOT для dev
+            artifactId = project.name.lowercase()
+            version = project.version.toString()
         }
     }
-
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/JouTak/MiniGamesAPI")
+            name = "Reposilite"
+            val repoUrl = "https://maven.joutak.ru"
+
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) "$repoUrl/snapshots" else "$repoUrl/releases")
+
             credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: "NOT_USED_LOCALLY"
-                password = System.getenv("GITHUB_TOKEN") ?: "NOT_USED_LOCALLY"
+                username = System.getenv("REPOSILITE_USER")
+                password = System.getenv("REPOSILITE_TOKEN")
+            }
+            authentication {
+                create<BasicAuthentication>("basic")
             }
         }
     }
