@@ -26,7 +26,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build and Publish
-        run: ./gradlew shadowJar publish -PcommitHash=$(git rev-parse --short "$GITHUB_SHA")
+        run: >
+          ./gradlew shadowJar publish 
+          -PcommitHash=$(git rev-parse --short "$GITHUB_SHA") 
+          -PbuildNumber=${{ github.run_number }} 
+          -PisRelease=${{ github.ref == 'refs/heads/master' }}
         env:
           # Имя пользователя жестко задано, так как оно привязано к токену, но можно тоже вынести в Secrets
           REPOSILITE_USER: github
