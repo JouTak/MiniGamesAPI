@@ -77,18 +77,23 @@ publishing {
             artifact(tasks.shadowJar)
             groupId = project.group.toString()
             artifactId = project.name.lowercase()
-            version = project.version.toString() // Используйте версию как есть, без добавления -SNAPSHOT
+            version = project.version.toString()
         }
     }
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/joutak/minigamesapi")
+            name = "Reposilite"
+            val repoUrl = "https://maven.joutak.ru"
+
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) "$repoUrl/snapshots" else "$repoUrl/releases")
+
             credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as? String
-                password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as? String
+                username = System.getenv("REPOSILITE_USER")
+                password = System.getenv("REPOSILITE_TOKEN")
+            }
+            authentication {
+                create<BasicAuthentication>("basic")
             }
         }
     }
 }
-
