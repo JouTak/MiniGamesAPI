@@ -76,8 +76,9 @@ tasks.processResources {
 
 tasks.shadowJar {
     outputs.upToDateWhen { false }
-    val randomSuffix = UUID.randomUUID().toString().substring(0, 8)
-    archiveFileName.set("${project.name}-${project.version}-${randomSuffix}.jar")
+    
+    // archiveFileName.set("${project.name}-${project.version}.jar")
+    archiveClassifier.set("") // so artifact uploaded to maven has no suffix
 
     // we do NOT want him here
     dependencies {
