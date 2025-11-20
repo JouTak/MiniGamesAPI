@@ -6,6 +6,7 @@ val repo: String by project
 project.group = group
 project.version = version
 
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.shadow)
