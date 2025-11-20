@@ -2,7 +2,7 @@ name: Gradle build and publish
 
 on:
   push:
-    branches: [ "master", "dev", "pers/abalakin/publish"]
+    branches: [ "master", "dev" ]
   pull_request:
     branches: [ "master", "dev" ]
 
