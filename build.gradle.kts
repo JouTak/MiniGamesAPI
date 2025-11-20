@@ -1,8 +1,10 @@
 val group: String by project
 val version: String by project
 val repo: String by project
+
 val isRelease = project.findProperty("isRelease") == "true"
 val commitHash = project.findProperty("commitHash") as String?
+val buildNumber = project.findProperty("buildNumber") as String?
 
 val calculatedVersion = if (isRelease) {
     version
@@ -11,12 +13,13 @@ val calculatedVersion = if (isRelease) {
     "$baseVersion-$suffix"
 }
 
-project.group = group
 project.version = calculatedVersion
 // PR to master: plugin-1.0.0.jar -> releases repo
 // Commit: plugin-1.0.0-{jobNumber}.jar -> snapshots repo
 // [Release] Build: plugin-1.0.0.jar
 // [Snapshot] Build: -> plugin-1.0.0-LOCAL.jar
+project.group = group
+
 plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.shadow)
