@@ -30,7 +30,7 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                     return@executes Command.SINGLE_SUCCESS
                 }
 
-                executor.sendMessage(Component.text("Вы добавлены в очередь!"))
+                executor.sendMessage(Component.text("Вы добавлены в очередь блаблабла!"))
 
                 // Открываем GUI для выбора команды, если есть свободные инстансы
                 val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.isFull() }
