@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.kotlinJvm)
     alias(libs.plugins.shadow)
     kotlin("plugin.serialization") version libs.versions.kotlin.get()
-    `maven-publish`  // добавлен плагин
+    `maven-publish`
 }
 
 repositories {
@@ -23,7 +23,6 @@ dependencies {
     compileOnly(libs.kotlin)
     compileOnly(libs.paper)
     compileOnly(libs.librelogin)
-
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 }
 
@@ -43,9 +42,8 @@ tasks.processResources {
     val minecraftVersion = libs.versions.paper.get().substringBefore("-")
     val commitHash = project.findProperty("commitHash") as String?
 
-    val website =
-        if (repo.isBlank()) "https://joutak.ru"
-        else commitHash?.let { "$repo/tree/$it" } ?: repo
+    val website = if (repo.isBlank()) "https://joutak.ru"
+    else commitHash?.let { "$repo/tree/$it" } ?: repo
 
     val props = mapOf(
         "NAME" to project.name,
@@ -79,8 +77,8 @@ publishing {
         create<MavenPublication>("maven") {
             from(components["java"])
             groupId = project.group.toString()
-            artifactId = project.name.lowercase()
-            version = project.version.toString()
+            artifactId = "minigamesapi"                  // фиксируем, чтобы не менялось
+            version = "${project.version}-SNAPSHOT"       // SNAPSHOT для dev
         }
     }
 
@@ -89,8 +87,8 @@ publishing {
             name = "GitHubPackages"
             url = uri("https://maven.pkg.github.com/JouTak/MiniGamesAPI")
             credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+                username = System.getenv("GITHUB_ACTOR") ?: "NOT_USED_LOCALLY"
+                password = System.getenv("GITHUB_TOKEN") ?: "NOT_USED_LOCALLY"
             }
         }
     }
