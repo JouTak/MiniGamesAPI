@@ -24,12 +24,22 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                     return@executes Command.SINGLE_SUCCESS
                 }
 
+                val playerIsAlreadyInGame = MatchmakingManager.getActiveInstances().any { instance ->
+                    instance.teams.flatten().any { playerInTeam ->
+                        playerInTeam.uniqueId == executor.uniqueId
+                    }
+                }
+
+                if (playerIsAlreadyInGame) {
+                    executor.sendMessage(Component.text("Вы уже находитесь в игре!", NamedTextColor.RED))
+                    return@executes Command.SINGLE_SUCCESS
+                }
+
                 val added = GameQueue.addPlayer(executor)
-//todo здесь софтлок может быть, по-моему очередь вообще не нужна
-//                if (!added) {
-//                    executor.sendMessage(Component.text("Вы уже в очереди!", NamedTextColor.YELLOW))
-//                    return@executes Command.SINGLE_SUCCESS
-//                }
+                if (!added) {
+                    executor.sendMessage(Component.text("Вы уже в очереди!", NamedTextColor.YELLOW))
+                    return@executes Command.SINGLE_SUCCESS
+                }
 
                 executor.sendMessage(Component.text("Вы добавлены в очередь! Выберите команду.", NamedTextColor.GREEN))
 
@@ -44,9 +54,19 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                             GameQueue.removePlayer(player)
                             MatchmakingManager.checkReady(instance)
 
-                            player.sendMessage(Component.text("Вы выбрали команду ${teamIndex + 1}!", NamedTextColor.GREEN))
+                            player.sendMessage(
+                                Component.text(
+                                    "Вы выбрали команду ${teamIndex + 1}!",
+                                    NamedTextColor.GREEN
+                                )
+                            )
                         } else {
-                            player.sendMessage(Component.text("Эта команда уже полна. Выберите другую.", NamedTextColor.RED))
+                            player.sendMessage(
+                                Component.text(
+                                    "Эта команда уже полна. Выберите другую.",
+                                    NamedTextColor.RED
+                                )
+                            )
                             GameQueue.removePlayer(player)
                         }
                     }
