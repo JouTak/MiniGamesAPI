@@ -1,3 +1,4 @@
+import java.util.UUID
 val group: String by project
 val version: String by project
 val repo: String by project
@@ -59,7 +60,8 @@ tasks.processResources {
 }
 
 tasks.shadowJar {
-    archiveFileName.set("${project.name}-${project.version}.jar")
+    val randomSuffix = UUID.randomUUID().toString().substring(0, 8)
+    archiveFileName.set("${project.name}-${project.version}-${randomSuffix}.jar")
 
     // we do NOT want him here
     dependencies {

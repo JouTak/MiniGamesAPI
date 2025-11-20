@@ -28,7 +28,7 @@ object ForceRunCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack
                 MatchmakingManager.forceReady(instance)
 
                 ctx.source.sender.sendMessage(
-                    Component.text("Инстанс ${instance.config.id} отправлен в очередь готовых!")
+                    Component.text("Игра будет запущена без ожидания остальных!")
                 )
 
                 Command.SINGLE_SUCCESS
