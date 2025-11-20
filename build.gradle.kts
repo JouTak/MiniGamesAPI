@@ -75,20 +75,17 @@ tasks.shadowJar {
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            artifact(tasks.shadowJar)  // публикуем shadowJar
+            artifact(tasks.shadowJar)
             groupId = project.group.toString()
-            artifactId = "minigamesapi"
+            artifactId = project.name.lowercase()  // или просто "minigamesapi"
             version = "${project.version}-SNAPSHOT"
         }
     }
     repositories {
         maven {
             name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/JouTak/MiniGamesAPI")
-            credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: "local"
-                password = System.getenv("GITHUB_TOKEN") ?: "local"
-            }
+            url = uri("https://maven.pkg.github.com/joutak/minigamesapi")  // lowercase!
+            // credentials без изменений
         }
     }
 }
