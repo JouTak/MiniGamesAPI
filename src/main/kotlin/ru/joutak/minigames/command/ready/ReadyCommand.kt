@@ -36,7 +36,7 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                 val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.isFull() }
                 if (instance != null) {
                     TeamSelectionGui.open(executor, instance) { player, teamIndex ->
-                        instance.teams[teamIndex].add(player)
+                        MatchmakingManager.addPlayer(player)
                         player.sendMessage(Component.text("Вы выбрали команду ${teamIndex + 1}"))
                     }
                 }

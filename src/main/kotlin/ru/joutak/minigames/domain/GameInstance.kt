@@ -6,12 +6,18 @@ class GameInstance(val config: GameInstanceConfig) {
     val teams = MutableList(config.teamCount) { mutableListOf<Player>() }
 
     fun addPlayer(player: Player): Boolean {
-        for (team in teams) {
-            if (team.size < config.playersPerTeam) {
-                team.add(player)
-                return true
-            }
+        val availableTeams = teams.filter { it.size < config.playersPerTeam }
+
+        if (availableTeams.isEmpty()) {
+            return false
         }
+        val targetTeam = availableTeams.minByOrNull { it.size }
+
+        if (targetTeam != null) {
+            targetTeam.add(player)
+            return true
+        }
+
         return false
     }
 
