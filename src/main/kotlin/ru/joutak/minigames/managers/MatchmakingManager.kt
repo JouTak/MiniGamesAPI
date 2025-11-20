@@ -35,7 +35,7 @@ object MatchmakingManager {
         return GameQueue.removePlayer(player)
     }
 
-    private fun checkReady(instance: GameInstance) {
+    fun checkReady(instance: GameInstance) {
         if (instance.isFull() && !readyQueue.contains(instance)) {
             readyQueue.add(instance)
             Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {

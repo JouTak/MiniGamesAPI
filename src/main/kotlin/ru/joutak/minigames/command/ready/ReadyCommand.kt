@@ -5,6 +5,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder
 import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.domain.GameQueue
@@ -23,22 +24,34 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                     return@executes Command.SINGLE_SUCCESS
                 }
 
-                // Добавляем игрока в очередь. Если уже в очереди, выдаём сообщение
                 val added = GameQueue.addPlayer(executor)
-                if (!added) {
-                    executor.sendMessage(Component.text("Вы уже в очереди!"))
-                    return@executes Command.SINGLE_SUCCESS
-                }
+//todo здесь софтлок может быть, по-моему очередь вообще не нужна
+//                if (!added) {
+//                    executor.sendMessage(Component.text("Вы уже в очереди!", NamedTextColor.YELLOW))
+//                    return@executes Command.SINGLE_SUCCESS
+//                }
 
-                executor.sendMessage(Component.text("Вы добавлены в очередь!"))
+                executor.sendMessage(Component.text("Вы добавлены в очередь! Выберите команду.", NamedTextColor.GREEN))
 
-                // Открываем GUI для выбора команды, если есть свободные инстансы
                 val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.isFull() }
+
                 if (instance != null) {
                     TeamSelectionGui.open(executor, instance) { player, teamIndex ->
-                        MatchmakingManager.addPlayer(player)
-                        player.sendMessage(Component.text("Вы выбрали команду ${teamIndex + 1}"))
+
+                        val chosenTeam = instance.teams[teamIndex]
+                        if (chosenTeam.size < instance.config.playersPerTeam) {
+                            chosenTeam.add(player)
+                            GameQueue.removePlayer(player)
+                            MatchmakingManager.checkReady(instance)
+
+                            player.sendMessage(Component.text("Вы выбрали команду ${teamIndex + 1}!", NamedTextColor.GREEN))
+                        } else {
+                            player.sendMessage(Component.text("Эта команда уже полна. Выберите другую.", NamedTextColor.RED))
+                            GameQueue.removePlayer(player)
+                        }
                     }
+                } else {
+                    executor.sendMessage(Component.text("Нет свободных арен. Ожидайте.", NamedTextColor.YELLOW))
                 }
 
                 Command.SINGLE_SUCCESS
