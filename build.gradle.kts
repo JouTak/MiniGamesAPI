@@ -71,24 +71,23 @@ tasks.shadowJar {
     }
 }
 
-// === Публикация в GitHub Packages ===
+// Публикация shadowJar в GitHub Packages
 publishing {
     publications {
         create<MavenPublication>("maven") {
-            from(components["java"])
+            artifact(tasks.shadowJar.get().archiveFile.get().asFile)
             groupId = project.group.toString()
-            artifactId = "minigamesapi"                  // фиксируем, чтобы не менялось
-            version = "${project.version}-SNAPSHOT"       // SNAPSHOT для dev
+            artifactId = "minigamesapi"
+            version = "${project.version}-SNAPSHOT"
         }
     }
-
     repositories {
         maven {
             name = "GitHubPackages"
             url = uri("https://maven.pkg.github.com/JouTak/MiniGamesAPI")
             credentials {
-                username = System.getenv("GITHUB_ACTOR") ?: "NOT_USED_LOCALLY"
-                password = System.getenv("GITHUB_TOKEN") ?: "NOT_USED_LOCALLY"
+                username = System.getenv("GITHUB_ACTOR") ?: "local"
+                password = System.getenv("GITHUB_TOKEN") ?: "local"
             }
         }
     }
