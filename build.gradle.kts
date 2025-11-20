@@ -61,6 +61,12 @@ tasks.processResources {
 tasks.shadowJar {
     archiveFileName.set("${project.name}-${project.version}.jar")
 
+    // we do NOT want him here
+    dependencies {
+        exclude(dependency("org.jetbrains.kotlin:.*"))
+        exclude(dependency("org.jetbrains:annotations"))
+    }
+
     if (System.getenv("TEST_PLUGIN_BUILD") != null) {
         val serverPath = System.getenv("SERVER_PATH")
         if (serverPath != null) {
