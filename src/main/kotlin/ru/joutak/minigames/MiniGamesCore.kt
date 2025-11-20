@@ -6,6 +6,7 @@ import org.bukkit.World
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
+import ru.joutak.minigames.command.ForceRunCommand
 import ru.joutak.minigames.command.mg.MiniGamesCommand
 import ru.joutak.minigames.command.mg.StartCommand
 import ru.joutak.minigames.command.ready.ReadyCommand
@@ -189,11 +190,13 @@ object MiniGamesCore {
         val readyCmd = ReadyCommand.getBuilder().build()
         val unreadyCmd = UnreadyCommand.getBuilder().build()
         val mgCmd = MiniGamesCommand.getBuilder().then(StartCommand.getBuilder()).build()
+        val forceRunCmd = ForceRunCommand.getBuilder().build()
 
         plugin.lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(readyCmd)
             event.registrar().register(unreadyCmd)
             event.registrar().register(mgCmd)
+            event.registrar().register(forceRunCmd)
         }
 
         plugin.logger.info("Commands registered.")

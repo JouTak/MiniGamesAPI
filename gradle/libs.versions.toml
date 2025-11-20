@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.2.0"
+kotlin = "1.9.23"
 jdk = "21"
 paper = "1.21.7-R0.1-SNAPSHOT"
 shadow = "9.1.0"

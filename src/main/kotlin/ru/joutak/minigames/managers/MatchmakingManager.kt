@@ -47,4 +47,10 @@ object MatchmakingManager {
 
     fun pollReady(): GameInstance? = readyQueue.poll()
     fun getActiveInstances(): List<GameInstance> = activeInstances.toList()
+    fun forceReady(instance: GameInstance) {
+        if (!readyQueue.contains(instance)) {
+            readyQueue.add(instance)
+        }
+    }
+
 }
