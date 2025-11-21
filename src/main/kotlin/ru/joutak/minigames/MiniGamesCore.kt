@@ -2,9 +2,7 @@ package ru.joutak.minigames
 
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bukkit.Bukkit
-import org.bukkit.World
 import org.bukkit.configuration.file.YamlConfiguration
-import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.ForceRunCommand
 import ru.joutak.minigames.command.mg.MiniGamesCommand
@@ -25,6 +23,7 @@ import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
+import ru.joutak.splatoon.listeners.PlayerJoinListener
 import java.nio.file.Path
 import kotlin.io.path.*
 
@@ -180,7 +179,7 @@ object MiniGamesCore {
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistChangeListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, plugin)
-
+        Bukkit.getPluginManager().registerEvents(PlayerJoinListener, plugin)
         plugin.logger.info("Events registered.")
     }
 
