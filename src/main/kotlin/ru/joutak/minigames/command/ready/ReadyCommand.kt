@@ -41,7 +41,7 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                     return@executes Command.SINGLE_SUCCESS
                 }
 
-                executor.sendMessage(Component.text("Вы добавлены в очередь! Выберите команду.", NamedTextColor.GREEN))
+                executor.sendMessage(Component.text("Выберите команду.", NamedTextColor.GREEN))
 
                 val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.isFull() }
 
@@ -56,7 +56,7 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
 
                             player.sendMessage(
                                 Component.text(
-                                    "Вы выбрали команду ${teamIndex + 1}!",
+                                    "Вы добавлены в очередь за команду ${teamIndex + 1}!",
                                     NamedTextColor.GREEN
                                 )
                             )
