@@ -24,9 +24,9 @@ object TeamSelectionGui : Listener {
     // Карта для цветной шерсти, соответствующая порядку команд 0, 1, 2, 3
     private val TEAM_MATERIALS: Map<Int, Material> = mapOf(
         0 to Material.RED_WOOL,    // 1-я команда (Красная)
-        1 to Material.BLUE_WOOL,   // 2-я команда (Синяя)
-        2 to Material.YELLOW_WOOL, // 3-я команда (Желтая)
-        3 to Material.GREEN_WOOL   // 4-я команда (Зеленая)
+        1 to Material.YELLOW_WOOL,   // 2-я команда (Желтая)
+        2 to Material.GREEN_WOOL, // 3-я команда (Зеленая)
+        3 to Material.BLUE_WOOL   // 4-я команда (Синяя)
     )
 
     init {
