@@ -1,6 +1,6 @@
 package ru.joutak.minigames.domain
 
-import java.util.UUID
+import java.util.*
 
 data class Participant(
     val uuid: UUID,

@@ -33,7 +33,8 @@ class ParticipantsFileWatcher(
     private val watcherThread: Thread
 
     init {
-        val dir = participantsFile.toPath().parent ?: throw IllegalArgumentException("Файл должен иметь путь к корневой папке!")
+        val dir = participantsFile.toPath().parent
+            ?: throw IllegalArgumentException("Файл должен иметь путь к корневой папке!")
         dir.register(
             watchService,
             StandardWatchEventKinds.ENTRY_MODIFY,

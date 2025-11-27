@@ -5,7 +5,7 @@ import ru.joutak.minigames.domain.PlayerData
 import java.io.File
 import java.sql.Connection
 import java.sql.DriverManager
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -85,7 +85,8 @@ class SqlitePlayerDataStorage(
         uuid: UUID,
         name: String,
         initialAttempts: Int,
-    ): CompletableFuture<PlayerData> = CompletableFuture.supplyAsync({ createIfNotExistsSync(uuid, name, initialAttempts) }, executor)
+    ): CompletableFuture<PlayerData> =
+        CompletableFuture.supplyAsync({ createIfNotExistsSync(uuid, name, initialAttempts) }, executor)
 
     override fun upsertPlayerData(playerData: PlayerData): CompletableFuture<Unit> =
         CompletableFuture.runAsync({ upsertPlayerDataSync(playerData) }, executor).thenApply {}

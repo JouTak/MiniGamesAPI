@@ -25,7 +25,7 @@ import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
 import ru.joutak.splatoon.listeners.PlayerJoinListener
 import java.nio.file.Path
-import kotlin.io.path.*
+import kotlin.io.path.exists
 
 object MiniGamesCore {
 

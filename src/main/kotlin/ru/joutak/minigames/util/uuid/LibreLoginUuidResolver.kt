@@ -4,7 +4,7 @@ import org.bukkit.World
 import org.bukkit.entity.Player
 import ru.joutak.minigames.MiniGamesCore
 import xyz.kyngs.librelogin.api.LibreLoginPlugin
-import java.util.UUID
+import java.util.*
 
 class LibreLoginUuidResolver(
     private val libreLogin: LibreLoginPlugin<Player, World>,

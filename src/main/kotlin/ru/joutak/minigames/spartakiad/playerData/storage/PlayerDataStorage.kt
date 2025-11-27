@@ -1,7 +1,7 @@
 package ru.joutak.minigames.spartakiad.playerData.storage
 
 import ru.joutak.minigames.domain.PlayerData
-import java.util.UUID
+import java.util.*
 import java.util.concurrent.CompletableFuture
 
 interface PlayerDataStorage : AutoCloseable {

@@ -1,14 +1,12 @@
 // PlayerFileCheckListener.kt
 package ru.joutak.minigames.listener
 
-import org.bukkit.Bukkit
+import net.kyori.adventure.text.Component
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.AsyncPlayerPreLoginEvent
-import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.MiniGamesAPI
 import ru.joutak.minigames.config.ConfigKeys
-import net.kyori.adventure.text.Component
 import java.io.File
 import java.nio.file.Files
 import java.util.stream.Collectors
@@ -68,8 +66,10 @@ object PlayerFileCheckListener : Listener {
         }
 
         if (!players.contains(event.name)) {
-            event.disallow(AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
-                Component.text("Ваш ник не в списке игроков!"))
+            event.disallow(
+                AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
+                Component.text("Ваш ник не в списке игроков!")
+            )
         }
     }
 }
