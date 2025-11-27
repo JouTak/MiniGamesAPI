@@ -5,7 +5,6 @@ import ru.joutak.minigames.spartakiad.participant.storage.ParticipantStorage
 import ru.joutak.minigames.spartakiad.whitelist.WhitelistManager
 import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
 import ru.joutak.minigames.util.uuid.UuidResolver
-import java.lang.AutoCloseable
 import java.nio.file.Path
 
 class SpartakiadManager(
