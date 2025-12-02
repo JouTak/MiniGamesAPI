@@ -30,10 +30,14 @@ object MatchmakingManager {
         for (instance in activeInstances) {
             if (instance.removePlayer(player)) {
                 GameQueue.removePlayer(player)
+                QueueBossBarManager.updateAll()
                 return true
             }
         }
-        return GameQueue.removePlayer(player)
+
+        val removed = GameQueue.removePlayer(player)
+        if (removed) QueueBossBarManager.updateAll()
+        return removed
     }
 
     fun checkReady(instance: GameInstance) {
