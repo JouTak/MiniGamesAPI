@@ -2,7 +2,7 @@ package ru.joutak.minigames.domain
 
 import ru.joutak.minigames.ui.QueueBossBarManager
 import org.bukkit.entity.Player as BukkitPlayer
-import java.util.UUID
+import java.util.*
 
 object GameQueue {
     private val queue: MutableSet<UUID> = mutableSetOf()  // храним уникальные id игроков

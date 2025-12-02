@@ -8,7 +8,7 @@ import ru.joutak.minigames.domain.GameInstanceConfig
 import ru.joutak.minigames.domain.GameQueue
 import ru.joutak.minigames.event.GameInstanceReadyEvent
 import ru.joutak.minigames.ui.QueueBossBarManager
-import java.util.ArrayDeque
+import java.util.*
 
 object MatchmakingManager {
     private val activeInstances = mutableListOf<GameInstance>()
