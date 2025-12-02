@@ -3,11 +3,11 @@ version: ${VERSION}
 api-version: ${MINECRAFT_VERSION}
 main: ru.joutak.minigames.MiniGamesPlugin
 description: 'Плагин для управления мини-играми и проведения спартакиад на сервере ITMOCraft.MiniGames'
-authors: ['EnderDissa', 'Stunnerer', 's4dnex']
-contributors: ['technosimp']
+authors: [ 'EnderDissa', 'Stunnerer', 's4dnex' ]
+contributors: [ 'technosimp' ]
 website: ${WEBSITE}
 
-depend: []
+depend: [ ]
 softdepend: [ 'LibreLogin' ]
 libraries:
   - 'org.jetbrains.kotlin:kotlin-stdlib:${KOTLIN_VERSION}'

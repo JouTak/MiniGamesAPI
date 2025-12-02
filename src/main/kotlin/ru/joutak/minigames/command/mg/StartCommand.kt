@@ -7,5 +7,6 @@ import io.papermc.paper.command.brigadier.Commands
 import ru.joutak.minigames.command.PluginCommand
 
 object StartCommand : PluginCommand<RequiredArgumentBuilder<CommandSourceStack, String>> {
-    override fun getBuilder(): RequiredArgumentBuilder<CommandSourceStack, String> = Commands.argument("start", StringArgumentType.string())
+    override fun getBuilder(): RequiredArgumentBuilder<CommandSourceStack, String> =
+        Commands.argument("start", StringArgumentType.string())
 }

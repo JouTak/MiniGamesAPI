@@ -2,7 +2,7 @@ package ru.joutak.minigames.domain
 
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.configuration.serialization.SerializableAs
-import java.util.UUID
+import java.util.*
 
 @SerializableAs("PlayerData")
 data class PlayerData(

@@ -13,6 +13,7 @@ import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.storage.YamlConfigStorage
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
+import ru.joutak.minigames.listener.PlayerQuitListener
 import ru.joutak.minigames.listener.WhitelistChangeListener
 import ru.joutak.minigames.listener.WhitelistReloadListener
 import ru.joutak.minigames.spartakiad.SpartakiadManager
@@ -25,7 +26,7 @@ import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
 import ru.joutak.splatoon.listeners.PlayerJoinListener
 import java.nio.file.Path
-import kotlin.io.path.*
+import kotlin.io.path.exists
 
 object MiniGamesCore {
 
@@ -180,6 +181,8 @@ object MiniGamesCore {
         Bukkit.getPluginManager().registerEvents(WhitelistChangeListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, plugin)
         Bukkit.getPluginManager().registerEvents(PlayerJoinListener, plugin)
+        Bukkit.getPluginManager().registerEvents(PlayerQuitListener, plugin)
+
         plugin.logger.info("Events registered.")
     }
 

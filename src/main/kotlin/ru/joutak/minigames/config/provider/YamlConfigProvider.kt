@@ -5,17 +5,14 @@ import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKey
 import ru.joutak.minigames.config.ConfigKeys
 import java.io.File
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.Executors
-import java.util.concurrent.ScheduledExecutorService
-import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicReference
 
 class YamlConfigProvider(
     private val configFile: File,
 ) : ConfigProvider {
-    private val configRef: AtomicReference<YamlConfiguration> = AtomicReference(YamlConfiguration.loadConfiguration(configFile))
+    private val configRef: AtomicReference<YamlConfiguration> =
+        AtomicReference(YamlConfiguration.loadConfiguration(configFile))
 
     @Volatile
     private var pendingSaveFuture: ScheduledFuture<*>? = null
