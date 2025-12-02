@@ -1,6 +1,7 @@
 package ru.joutak.minigames.domain
 
 import org.bukkit.entity.Player
+import ru.joutak.minigames.ui.QueueBossBarManager
 
 class GameInstance(val config: GameInstanceConfig) {
     val teams = MutableList(config.teamCount) { mutableListOf<Player>() }
@@ -15,6 +16,7 @@ class GameInstance(val config: GameInstanceConfig) {
 
         if (targetTeam != null) {
             targetTeam.add(player)
+            QueueBossBarManager.updateAll()
             return true
         }
 

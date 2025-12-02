@@ -1,5 +1,6 @@
 package ru.joutak.minigames.domain
 
+import ru.joutak.minigames.ui.QueueBossBarManager
 import org.bukkit.entity.Player as BukkitPlayer
 import java.util.UUID
 
@@ -11,6 +12,7 @@ object GameQueue {
     fun addPlayer(player: BukkitPlayer): Boolean {
         val added = queue.add(player.uniqueId)
         players[player.uniqueId] = player
+        QueueBossBarManager.updateAll()
         return added
     }
 
@@ -19,6 +21,7 @@ object GameQueue {
         playerTeams[player.uniqueId]?.remove(player)
         playerTeams.remove(player.uniqueId)
         players.remove(player.uniqueId)
+        QueueBossBarManager.updateAll()
         return true
     }
 

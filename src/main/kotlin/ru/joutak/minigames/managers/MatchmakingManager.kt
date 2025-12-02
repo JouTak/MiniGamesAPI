@@ -7,6 +7,7 @@ import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameInstanceConfig
 import ru.joutak.minigames.domain.GameQueue
 import ru.joutak.minigames.event.GameInstanceReadyEvent
+import ru.joutak.minigames.ui.QueueBossBarManager
 import java.util.ArrayDeque
 
 object MatchmakingManager {
@@ -38,6 +39,7 @@ object MatchmakingManager {
     fun checkReady(instance: GameInstance) {
         if (instance.isFull() && !readyQueue.contains(instance)) {
             readyQueue.add(instance)
+            QueueBossBarManager.updateAll()
             Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
                 Bukkit.getPluginManager().callEvent(GameInstanceReadyEvent(instance))
             })
