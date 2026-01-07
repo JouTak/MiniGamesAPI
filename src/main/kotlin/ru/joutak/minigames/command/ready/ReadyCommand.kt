@@ -9,8 +9,8 @@ import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.entity.Player
 import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.domain.GameQueue
-import ru.joutak.minigames.gui.TeamSelectionGui
 import ru.joutak.minigames.managers.MatchmakingManager
+import ru.joutak.minigames.ui.QueueBossBarManager
 
 object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
 
@@ -22,58 +22,60 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                     return@executes Command.SINGLE_SUCCESS
                 }
 
-                val playerIsAlreadyInGame = MatchmakingManager.getActiveInstances().any { instance ->
-                    instance.teams.flatten().any { it.uniqueId == executor.uniqueId }
-                }
-
-                if (playerIsAlreadyInGame) {
-                    executor.sendMessage(Component.text("Вы уже находитесь в игре!", NamedTextColor.RED))
-                    return@executes Command.SINGLE_SUCCESS
-                }
-
-                val added = GameQueue.addPlayer(executor)
-                if (!added) {
-                    executor.sendMessage(Component.text("Вы уже в очереди!", NamedTextColor.YELLOW))
-                    return@executes Command.SINGLE_SUCCESS
-                }
-
-                executor.sendMessage(Component.text("Выберите команду.", NamedTextColor.GREEN))
-
-                val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.started && !it.isFull() }
-
-                if (instance != null) {
-                    TeamSelectionGui.open(executor, instance) { player, teamIndex ->
-
-                        // Если матч уже стартовал, не даём записаться (и очищаем очередь).
-                        if (instance.started) {
-                            GameQueue.removePlayer(player)
-                            player.sendMessage(
-                                Component.text("Этот матч уже запущен. Встаньте в очередь заново.", NamedTextColor.RED)
-                            )
-                            return@open
-                        }
-
-                        val chosenTeam = instance.teams[teamIndex]
-                        if (chosenTeam.size < instance.config.playersPerTeam) {
-                            chosenTeam.add(player)
-                            GameQueue.removePlayer(player)
-                            MatchmakingManager.checkReady(instance)
-
-                            player.sendMessage(
-                                Component.text("Вы добавлены в очередь за команду ${teamIndex + 1}!", NamedTextColor.GREEN)
-                            )
-                        } else {
-                            player.sendMessage(
-                                Component.text("Эта команда уже полна. Выберите другую.", NamedTextColor.RED)
-                            )
-                            GameQueue.removePlayer(player)
-                        }
-                    }
-                } else {
-                    executor.sendMessage(Component.text("Нет свободных арен. Ожидайте.", NamedTextColor.YELLOW))
-                }
-
+                performReady(executor)
                 Command.SINGLE_SUCCESS
             }
+    }
+
+    /**
+     * "Быстрое добавление" — в первую свободную команду (по индексу) первой доступной арены.
+     * Возвращает true, если игрок был добавлен в ожидание.
+     */
+    fun performReady(player: Player): Boolean {
+        val uuid = player.uniqueId
+
+        if (MatchmakingManager.isPlayerInStartedGame(uuid)) {
+            player.sendMessage(Component.text("Сейчас вы в игре. Нельзя вставать в очередь.", NamedTextColor.RED))
+            return false
+        }
+
+        if (MatchmakingManager.isPlayerInAnyInstance(uuid)) {
+            player.sendMessage(Component.text("Вы уже в очереди!", NamedTextColor.RED))
+            return false
+        }
+
+        val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.started && !it.isFull() }
+        if (instance == null) {
+            player.sendMessage(Component.text("Нет свободных арен. Ожидайте.", NamedTextColor.YELLOW))
+            return false
+        }
+
+        // Первая свободная команда
+        val teamIndex = instance.teams.indexOfFirst { it.size < instance.config.playersPerTeam }
+        if (teamIndex == -1) {
+            player.sendMessage(Component.text("Нет свободных мест в командах. Ожидайте.", NamedTextColor.YELLOW))
+            return false
+        }
+
+        // Если игрок был в очереди выбора команды — снимаем.
+        GameQueue.removePlayer(player)
+
+        val added = instance.addPlayerToTeamIndex(player, teamIndex)
+        if (!added) {
+            player.sendMessage(Component.text("Не удалось встать в очередь. Попробуйте ещё раз.", NamedTextColor.RED))
+            return false
+        }
+
+        MatchmakingManager.checkReady(instance)
+        QueueBossBarManager.updateAll()
+
+        player.sendMessage(
+            Component.text(
+                "Вы добавлены в очередь за команду ${teamIndex + 1}!",
+                NamedTextColor.GREEN
+            )
+        )
+
+        return true
     }
 }

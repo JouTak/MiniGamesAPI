@@ -7,8 +7,10 @@ import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameInstanceConfig
 import ru.joutak.minigames.domain.GameQueue
 import ru.joutak.minigames.event.GameInstanceReadyEvent
+import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.ui.QueueBossBarManager
 import java.util.ArrayDeque
+import java.util.UUID
 
 object MatchmakingManager {
     private val activeInstances = mutableListOf<GameInstance>()
@@ -21,6 +23,16 @@ object MatchmakingManager {
         QueueBossBarManager.updateAll()
     }
 
+    fun getActiveInstances(): List<GameInstance> = activeInstances.toList()
+
+    fun isPlayerInStartedGame(uuid: UUID): Boolean {
+        return activeInstances.any { it.started && it.hasActivePlayer(uuid) }
+    }
+
+    fun isPlayerInAnyInstance(uuid: UUID): Boolean {
+        return activeInstances.any { it.hasWaitingPlayer(uuid) || (it.started && it.hasActivePlayer(uuid)) }
+    }
+
     fun addPlayer(player: Player) {
         val instance = activeInstances.firstOrNull { !it.started && !it.isFull() } ?: return
         if (instance.addPlayer(player)) {
@@ -28,23 +40,42 @@ object MatchmakingManager {
         }
     }
 
+    /**
+     * Removes player from:
+     * - started match participants
+     * - waiting teams
+     * - selection queue
+     * - queue bossbar
+     */
     fun removePlayer(player: Player): Boolean {
+        val uuid = player.uniqueId
         var removedFromInstance = false
+        var removedFromActiveMatch = false
 
         for (instance in activeInstances) {
-            if (instance.removePlayer(player)) {
+            // If player is in a started match, remove from active participants.
+            if (instance.started && instance.hasActivePlayer(uuid)) {
+                if (instance.removeActivePlayer(uuid)) {
+                    removedFromInstance = true
+                    removedFromActiveMatch = true
+                }
+
+                // If it's a started instance, it's not eligible for ready queue.
+                readyQueue.remove(instance)
+
+                // Don't break: player might also still be present in waiting teams in buggy situations.
+            }
+
+            // Remove from waiting teams (pre-game)
+            if (!instance.started && instance.removePlayer(player)) {
                 removedFromInstance = true
 
-                // если перестал быть полным — убираем из readyQueue
+                // If it's not full anymore, it can't be ready.
                 if (!instance.isFull()) {
                     readyQueue.remove(instance)
                 }
 
-                // если матч стартовал и все вышли — сброс started
-                if (instance.teams.all { it.isEmpty() }) {
-                    instance.started = false
-                }
-
+                // Player cannot be in multiple instances.
                 break
             }
         }
@@ -54,6 +85,15 @@ object MatchmakingManager {
 
         if (removedFromInstance || removedFromQueue) {
             QueueBossBarManager.updateAll()
+        }
+
+        // If player left a running match, restore lobby items (after other plugins clean inventory).
+        if (removedFromActiveMatch && player.isOnline && !isPlayerInStartedGame(uuid)) {
+            Bukkit.getScheduler().runTaskLater(MiniGamesCore.plugin, Runnable {
+                if (player.isOnline) {
+                    LobbyItemsManager.ensure(player)
+                }
+            }, 1L)
         }
 
         return removedFromInstance || removedFromQueue
@@ -69,22 +109,25 @@ object MatchmakingManager {
         }
     }
 
+    /**
+     * Marks next ready instance as started and returns it to the minigame.
+     * IMPORTANT: snapshots players as active match participants, because some minigames clear teams at start.
+     */
     fun pollReady(): GameInstance? {
         val instance = readyQueue.poll() ?: return null
 
-        // матч стартовал
-        instance.started = true
+        val activeIds = instance.startMatchAndSnapshotPlayers()
 
-        // снимаем BossBar у всех игроков инстанса
-        instance.teams.flatten()
-            .distinctBy { it.uniqueId }
-            .forEach { QueueBossBarManager.remove(it) }
+        // Remove queue BossBars and lobby items from all match participants.
+        activeIds.mapNotNull { Bukkit.getPlayer(it) }
+            .forEach {
+                QueueBossBarManager.remove(it)
+                LobbyItemsManager.remove(it)
+            }
 
         QueueBossBarManager.updateAll()
         return instance
     }
-
-    fun getActiveInstances(): List<GameInstance> = activeInstances.toList()
 
     fun forceReady(instance: GameInstance) {
         if (instance.started) return

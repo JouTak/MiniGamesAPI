@@ -2,7 +2,6 @@ package ru.joutak.minigames.listener
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
-
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
@@ -18,13 +17,24 @@ object PlayerJoinListener : Listener {
             { _ ->
                 player.sendMessage(
                     Component.text("Основные команды:\n", NamedTextColor.YELLOW)
-                        .append(Component.text("/ready - встать в очередь\n", NamedTextColor.YELLOW))
-                        .append(Component.text("/unready - выйти из очереди\n", NamedTextColor.YELLOW))
+                        .append(
+                            Component.text(
+                                "/ready - быстро присоединиться к первой свободной команде\n",
+                                NamedTextColor.YELLOW
+                            )
+                        )
+                        .append(
+                            Component.text(
+                                "/teamselect - выбрать команду (или используйте предмет в хотбаре)\n",
+                                NamedTextColor.YELLOW
+                            )
+                        )
+                        .append(Component.text("/unready - выйти из очереди/ожидания\n", NamedTextColor.YELLOW))
                         .append(Component.text("/lobby - вернуться в лобби миниигр", NamedTextColor.YELLOW))
                 )
             },
-            null,      // retired (можно оставить null)
-            20L        // задержка в тиках
+            null,
+            20L
         )
     }
 }

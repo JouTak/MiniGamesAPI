@@ -14,18 +14,18 @@ object QueueBossBarManager {
 
     fun updateFor(player: Player) {
         val instance = MatchmakingManager.getActiveInstances().firstOrNull { inst ->
-            !inst.started && inst.teams.flatten().any { it.uniqueId == player.uniqueId }
+            inst.teams.flatten().any { it.uniqueId == player.uniqueId }
         }
 
-        // Если игрок больше не в ожидании (или матч уже запущен) — скрываем BossBar.
-        if (instance == null) {
+        // If player is not in any instance or instance already started -> remove bar.
+        if (instance == null || instance.started) {
             remove(player)
             return
         }
 
         val total = instance.config.teamCount * instance.config.playersPerTeam
         val current = instance.teams.sumOf { it.size }
-        val progress = current.toFloat() / total.toFloat()
+        val progress = if (total <= 0) 0f else current.toFloat() / total.toFloat()
 
         val bar = bars.computeIfAbsent(player.uniqueId) {
             BossBar.bossBar(

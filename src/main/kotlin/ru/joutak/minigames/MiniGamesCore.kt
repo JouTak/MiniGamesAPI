@@ -8,15 +8,18 @@ import ru.joutak.minigames.command.ForceRunCommand
 import ru.joutak.minigames.command.mg.MiniGamesCommand
 import ru.joutak.minigames.command.mg.StartCommand
 import ru.joutak.minigames.command.ready.ReadyCommand
+import ru.joutak.minigames.command.teamselect.TeamSelectCommand
 import ru.joutak.minigames.command.unready.UnreadyCommand
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.storage.YamlConfigStorage
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
+import ru.joutak.minigames.listener.LobbyItemsListener
 import ru.joutak.minigames.listener.PlayerJoinListener
 import ru.joutak.minigames.listener.PlayerQuitListener
 import ru.joutak.minigames.listener.WhitelistChangeListener
 import ru.joutak.minigames.listener.WhitelistReloadListener
+import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.spartakiad.SpartakiadManager
 import ru.joutak.minigames.spartakiad.participant.storage.SqliteParticipantStorage
 import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
@@ -30,11 +33,6 @@ import kotlin.io.path.exists
 
 object MiniGamesCore {
 
-    private val initLock = Any()
-
-    @Volatile
-    private var initialized: Boolean = false
-
     lateinit var configuration: Config
         private set
 
@@ -42,19 +40,20 @@ object MiniGamesCore {
 
     lateinit var plugin: JavaPlugin
 
+    @Volatile
+    private var initialized: Boolean = false
+
     // Динамически загружаемый LibreLogin
     private var libreLogin: Any? = null
 
     fun initialize(plugin: JavaPlugin) {
-        synchronized(initLock) {
-            if (initialized) {
-                plugin.logger.info("MiniGamesCore уже инициализирован, пропускаю повторный initialize().")
-                return
-            }
-
-            this.plugin = plugin
-            initialized = true
+        if (initialized) {
+            plugin.logger.info("MiniGamesCore уже инициализирован, пропускаю повторный initialize().")
+            return
         }
+        initialized = true
+
+        this.plugin = plugin
 
         plugin.logger.info("=== MiniGamesCore.initialize() START ===")
 
@@ -63,6 +62,15 @@ object MiniGamesCore {
         initSpartakiadManager()
         registerEvents()
         registerCommands()
+
+        // If server reloaded and players are already online, ensure lobby items are present.
+        Bukkit.getOnlinePlayers().forEach { p ->
+            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                if (p.isOnline) {
+                    LobbyItemsManager.ensure(p)
+                }
+            }, 1L)
+        }
 
         MiniGamesAPI.initialize(plugin, configuration)
         plugin.logger.info("MiniGamesAPI встроена как библиотека")
@@ -169,7 +177,6 @@ object MiniGamesCore {
                 BukkitUuidResolver()
             }
 
-
         val dbFile = gamePath.resolve("participants.db").toFile()
         plugin.logger.info("participants.db = ${dbFile.absolutePath}")
 
@@ -193,6 +200,11 @@ object MiniGamesCore {
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistChangeListener, plugin)
         Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, plugin)
+
+        // Lobby UX
+        Bukkit.getPluginManager().registerEvents(LobbyItemsListener, plugin)
+
+        // Helpful join message / cleanup
         Bukkit.getPluginManager().registerEvents(PlayerJoinListener, plugin)
         Bukkit.getPluginManager().registerEvents(PlayerQuitListener, plugin)
 
@@ -203,12 +215,14 @@ object MiniGamesCore {
         plugin.logger.info("Registering commands...")
 
         val readyCmd = ReadyCommand.getBuilder().build()
+        val teamSelectCmd = TeamSelectCommand.getBuilder().build()
         val unreadyCmd = UnreadyCommand.getBuilder().build()
         val mgCmd = MiniGamesCommand.getBuilder().then(StartCommand.getBuilder()).build()
         val forceRunCmd = ForceRunCommand.getBuilder().build()
 
         plugin.lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(readyCmd)
+            event.registrar().register(teamSelectCmd)
             event.registrar().register(unreadyCmd)
             event.registrar().register(mgCmd)
             event.registrar().register(forceRunCmd)
@@ -220,18 +234,7 @@ object MiniGamesCore {
     fun shutdown() {
         plugin.logger.info("MiniGamesCore.shutdown()")
 
-        synchronized(initLock) {
-            if (!initialized) return
-            initialized = false
-        }
-
-        try {
-            configuration.close()
-        } catch (_: Throwable) {
-        }
-        try {
-            spartakiadManager.close()
-        } catch (_: Throwable) {
-        }
+        configuration.close()
+        spartakiadManager.close()
     }
 }
