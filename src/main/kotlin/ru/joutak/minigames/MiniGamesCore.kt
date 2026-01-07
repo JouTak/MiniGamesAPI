@@ -13,6 +13,7 @@ import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.storage.YamlConfigStorage
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
+import ru.joutak.minigames.listener.PlayerJoinListener
 import ru.joutak.minigames.listener.PlayerQuitListener
 import ru.joutak.minigames.listener.WhitelistChangeListener
 import ru.joutak.minigames.listener.WhitelistReloadListener
@@ -24,11 +25,15 @@ import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
-import ru.joutak.splatoon.listeners.PlayerJoinListener
 import java.nio.file.Path
 import kotlin.io.path.exists
 
 object MiniGamesCore {
+
+    private val initLock = Any()
+
+    @Volatile
+    private var initialized: Boolean = false
 
     lateinit var configuration: Config
         private set
@@ -41,7 +46,15 @@ object MiniGamesCore {
     private var libreLogin: Any? = null
 
     fun initialize(plugin: JavaPlugin) {
-        this.plugin = plugin
+        synchronized(initLock) {
+            if (initialized) {
+                plugin.logger.info("MiniGamesCore уже инициализирован, пропускаю повторный initialize().")
+                return
+            }
+
+            this.plugin = plugin
+            initialized = true
+        }
 
         plugin.logger.info("=== MiniGamesCore.initialize() START ===")
 
@@ -207,7 +220,18 @@ object MiniGamesCore {
     fun shutdown() {
         plugin.logger.info("MiniGamesCore.shutdown()")
 
-        configuration.close()
-        spartakiadManager.close()
+        synchronized(initLock) {
+            if (!initialized) return
+            initialized = false
+        }
+
+        try {
+            configuration.close()
+        } catch (_: Throwable) {
+        }
+        try {
+            spartakiadManager.close()
+        } catch (_: Throwable) {
+        }
     }
 }

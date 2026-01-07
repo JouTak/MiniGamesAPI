@@ -18,16 +18,12 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
         return Commands.literal("ready")
             .executes { ctx ->
                 val executor = ctx.source.executor as? Player ?: run {
-                    ctx.source.sender.sendMessage(
-                        Component.text("Только игроки могут использовать эту команду")
-                    )
+                    ctx.source.sender.sendMessage(Component.text("Только игроки могут использовать эту команду"))
                     return@executes Command.SINGLE_SUCCESS
                 }
 
                 val playerIsAlreadyInGame = MatchmakingManager.getActiveInstances().any { instance ->
-                    instance.teams.flatten().any { playerInTeam ->
-                        playerInTeam.uniqueId == executor.uniqueId
-                    }
+                    instance.teams.flatten().any { it.uniqueId == executor.uniqueId }
                 }
 
                 if (playerIsAlreadyInGame) {
@@ -43,10 +39,19 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
 
                 executor.sendMessage(Component.text("Выберите команду.", NamedTextColor.GREEN))
 
-                val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.isFull() }
+                val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.started && !it.isFull() }
 
                 if (instance != null) {
                     TeamSelectionGui.open(executor, instance) { player, teamIndex ->
+
+                        // Если матч уже стартовал, не даём записаться (и очищаем очередь).
+                        if (instance.started) {
+                            GameQueue.removePlayer(player)
+                            player.sendMessage(
+                                Component.text("Этот матч уже запущен. Встаньте в очередь заново.", NamedTextColor.RED)
+                            )
+                            return@open
+                        }
 
                         val chosenTeam = instance.teams[teamIndex]
                         if (chosenTeam.size < instance.config.playersPerTeam) {
@@ -55,17 +60,11 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
                             MatchmakingManager.checkReady(instance)
 
                             player.sendMessage(
-                                Component.text(
-                                    "Вы добавлены в очередь за команду ${teamIndex + 1}!",
-                                    NamedTextColor.GREEN
-                                )
+                                Component.text("Вы добавлены в очередь за команду ${teamIndex + 1}!", NamedTextColor.GREEN)
                             )
                         } else {
                             player.sendMessage(
-                                Component.text(
-                                    "Эта команда уже полна. Выберите другую.",
-                                    NamedTextColor.RED
-                                )
+                                Component.text("Эта команда уже полна. Выберите другую.", NamedTextColor.RED)
                             )
                             GameQueue.removePlayer(player)
                         }

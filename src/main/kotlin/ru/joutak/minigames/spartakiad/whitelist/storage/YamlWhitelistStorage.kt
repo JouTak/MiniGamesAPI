@@ -12,6 +12,7 @@ import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicReference
 
 class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
+    private val lock = Any()
     private val whitelistRef = AtomicReference<YamlConfiguration>(YamlConfiguration())
 
     @Volatile
@@ -41,14 +42,16 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
     override fun getLastSavedAt(): Long = lastSavedAt
 
     override fun getAll(): Set<String> {
-        val whitelistYaml = whitelistRef.get()
-        if (!whitelistYaml.contains(yamlKey)) {
-            MiniGamesCore.plugin.logger.warning("Не найден ключ $yamlKey в файле с участниками ${whitelistFile.name}!")
-            return emptySet()
-        }
+        synchronized(lock) {
+            val whitelistYaml = whitelistRef.get()
+            if (!whitelistYaml.contains(yamlKey)) {
+                MiniGamesCore.plugin.logger.warning("Не найден ключ $yamlKey в файле с участниками ${whitelistFile.name}!")
+                return emptySet()
+            }
 
-        return whitelistYaml.getStringList(yamlKey)
-            .map { it.trim() }.filter { it.isNotBlank() }.toSet()
+            return whitelistYaml.getStringList(yamlKey)
+                .map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        }
     }
 
     override fun contains(playerDto: PlayerDto): Boolean {
@@ -56,29 +59,33 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
     }
 
     override fun add(playerDto: PlayerDto): Boolean {
-        if (!contains(playerDto)) {
-            return false
-        }
+        synchronized(lock) {
+            if (contains(playerDto)) {
+                return false
+            }
 
-        val whitelistYaml = whitelistRef.get()
-        val whitelist = whitelistYaml.getStringList(yamlKey)
-        whitelist.add(playerDto.name)
-        whitelistYaml.set(yamlKey, whitelist)
-        scheduleSave(whitelistYaml)
-        return true
+            val whitelistYaml = whitelistRef.get()
+            val whitelist = whitelistYaml.getStringList(yamlKey)
+            whitelist.add(playerDto.name)
+            whitelistYaml.set(yamlKey, whitelist)
+            scheduleSave(whitelistYaml)
+            return true
+        }
     }
 
     override fun remove(playerDto: PlayerDto): Boolean {
-        if (!contains(playerDto)) {
-            return false
-        }
+        synchronized(lock) {
+            if (!contains(playerDto)) {
+                return false
+            }
 
-        val whitelistYaml = whitelistRef.get()
-        val whitelist = whitelistYaml.getStringList(yamlKey)
-        whitelist.remove(playerDto.name)
-        whitelistYaml.set(yamlKey, whitelist)
-        scheduleSave(whitelistYaml)
-        return true
+            val whitelistYaml = whitelistRef.get()
+            val whitelist = whitelistYaml.getStringList(yamlKey)
+            whitelist.remove(playerDto.name)
+            whitelistYaml.set(yamlKey, whitelist)
+            scheduleSave(whitelistYaml)
+            return true
+        }
     }
 
     private fun scheduleSave(whitelistYaml: YamlConfiguration) {
@@ -92,8 +99,10 @@ class YamlWhitelistStorage(private val whitelistFile: File) : WhitelistStorage {
 
     private fun saveToFile(whitelistYaml: YamlConfiguration) {
         try {
-            whitelistYaml.save(whitelistFile)
-            lastSavedAt = System.currentTimeMillis()
+            synchronized(lock) {
+                whitelistYaml.save(whitelistFile)
+                lastSavedAt = System.currentTimeMillis()
+            }
         } catch (t: Throwable) {
             MiniGamesCore.plugin.logger.severe("Не удалось сохранить список участников: ${t.message}")
             MiniGamesCore.plugin.logger.severe(t.stackTraceToString())

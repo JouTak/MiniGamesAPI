@@ -10,6 +10,7 @@ import java.util.concurrent.atomic.AtomicReference
 class YamlParticipantsProvider(
     private val participantsFile: File,
 ) : ParticipantsProvider {
+    private val lock = Any()
     private val participantsRef = AtomicReference<YamlConfiguration>(YamlConfiguration())
 
     @Volatile
@@ -30,52 +31,62 @@ class YamlParticipantsProvider(
     override fun getLastSavedAt(): Long = lastSavedAt
 
     override fun getAll(): List<String> {
-        val yamlParticipants = participantsRef.get()
-        if (!yamlParticipants.contains(key)) {
-            MiniGamesCore.plugin.logger.warning("Не найден ключ $key в файле с участниками ${participantsFile.name}!")
-            return emptyList()
+        synchronized(lock) {
+            val yamlParticipants = participantsRef.get()
+            if (!yamlParticipants.contains(key)) {
+                MiniGamesCore.plugin.logger.warning("Не найден ключ $key в файле с участниками ${participantsFile.name}!")
+                return emptyList()
+            }
+            return yamlParticipants.getStringList(key).map { it.trim() }.filter { it.isNotBlank() }
         }
-        return yamlParticipants.getStringList(key).map { it.trim() }.filter { it.isNotBlank() }
     }
 
     override fun contains(name: String): Boolean {
-        val yamlParticipants = participantsRef.get()
-        if (!yamlParticipants.contains(key)) {
-            return false
+        synchronized(lock) {
+            val yamlParticipants = participantsRef.get()
+            if (!yamlParticipants.contains(key)) {
+                return false
+            }
+            return yamlParticipants.getStringList(key).contains(name)
         }
-        return yamlParticipants.getStringList(key).contains(name)
     }
 
     override fun add(name: String): Boolean {
-        val yamlParticipants = participantsRef.get()
-        val participantsList = yamlParticipants.getStringList(key)
-        if (participantsList.contains(name)) {
-            return false
+        synchronized(lock) {
+            val yamlParticipants = participantsRef.get()
+            val participantsList = yamlParticipants.getStringList(key)
+            if (participantsList.contains(name)) {
+                return false
+            }
+            participantsList.add(name)
+            yamlParticipants.set(key, participantsList)
+            scheduleSave(yamlParticipants)
+            return true
         }
-        participantsList.add(name)
-        yamlParticipants.set(key, participantsList)
-        scheduleSave(yamlParticipants)
-        return true
     }
 
     override fun remove(name: String): Boolean {
-        val yamlParticipants = participantsRef.get()
-        val participantsList = yamlParticipants.getStringList(key)
-        if (participantsList.contains(name)) {
-            return false
+        synchronized(lock) {
+            val yamlParticipants = participantsRef.get()
+            val participantsList = yamlParticipants.getStringList(key)
+            if (!participantsList.contains(name)) {
+                return false
+            }
+            participantsList.remove(name)
+            yamlParticipants.set(key, participantsList)
+            scheduleSave(yamlParticipants)
+            return true
         }
-        participantsList.remove(name)
-        yamlParticipants.set(key, participantsList)
-        scheduleSave(yamlParticipants)
-        return true
     }
 
     @Synchronized
     override fun save(participants: Collection<String>) {
         executor.execute {
-            val yamlParticipants = participantsRef.get()
-            yamlParticipants.set(key, participants.sorted().toList())
-            scheduleSave(yamlParticipants)
+            synchronized(lock) {
+                val yamlParticipants = participantsRef.get()
+                yamlParticipants.set(key, participants.sorted().toList())
+                scheduleSave(yamlParticipants)
+            }
         }
     }
 
@@ -90,8 +101,10 @@ class YamlParticipantsProvider(
 
     private fun saveToFile(yaml: YamlConfiguration) {
         try {
-            yaml.save(participantsFile)
-            lastSavedAt = System.currentTimeMillis()
+            synchronized(lock) {
+                yaml.save(participantsFile)
+                lastSavedAt = System.currentTimeMillis()
+            }
         } catch (t: Throwable) {
             MiniGamesCore.plugin.logger.severe("Не удалось сохранить список участников: ${t.message}")
             MiniGamesCore.plugin.logger.severe(t.stackTraceToString())

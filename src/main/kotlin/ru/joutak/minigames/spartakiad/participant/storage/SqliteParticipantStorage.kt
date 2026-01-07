@@ -115,7 +115,7 @@ class SqliteParticipantStorage(
         CompletableFuture.supplyAsync({ hasWonSync(uuid) }, executor).exceptionally { t ->
             MiniGamesCore.plugin.logger.severe("Не удалось получить данные игрока с UUID $uuid: ${t.message}")
             MiniGamesCore.plugin.logger.severe(t.stackTraceToString())
-            return@exceptionally null
+            return@exceptionally false
         }
 
     // Sync variants of methods (to run in executor)

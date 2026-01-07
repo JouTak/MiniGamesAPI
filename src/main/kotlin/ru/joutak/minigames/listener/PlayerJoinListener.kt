@@ -1,4 +1,4 @@
-package ru.joutak.splatoon.listeners
+package ru.joutak.minigames.listener
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor

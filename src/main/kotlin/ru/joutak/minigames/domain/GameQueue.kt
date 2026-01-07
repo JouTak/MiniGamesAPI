@@ -1,11 +1,11 @@
 package ru.joutak.minigames.domain
 
-import ru.joutak.minigames.ui.QueueBossBarManager
 import org.bukkit.entity.Player as BukkitPlayer
-import java.util.*
+import ru.joutak.minigames.ui.QueueBossBarManager
+import java.util.UUID
 
 object GameQueue {
-    private val queue: MutableSet<UUID> = mutableSetOf()  // храним уникальные id игроков
+    private val queue: MutableSet<UUID> = mutableSetOf()
     private val players: MutableMap<UUID, BukkitPlayer> = mutableMapOf()
     private val playerTeams: MutableMap<UUID, Team> = mutableMapOf()
 
@@ -17,12 +17,19 @@ object GameQueue {
     }
 
     fun removePlayer(player: BukkitPlayer): Boolean {
-        queue.remove(player.uniqueId)
-        playerTeams[player.uniqueId]?.remove(player)
-        playerTeams.remove(player.uniqueId)
-        players.remove(player.uniqueId)
-        QueueBossBarManager.updateAll()
-        return true
+        val uuid = player.uniqueId
+
+        val removedFromQueue = queue.remove(uuid)
+        val hadPlayerRef = players.remove(uuid) != null
+
+        val team = playerTeams.remove(uuid)
+        team?.remove(player)
+
+        if (removedFromQueue || hadPlayerRef || team != null) {
+            QueueBossBarManager.updateAll()
+        }
+
+        return removedFromQueue
     }
 
     fun assignPlayerToTeam(player: BukkitPlayer, team: Team) {
