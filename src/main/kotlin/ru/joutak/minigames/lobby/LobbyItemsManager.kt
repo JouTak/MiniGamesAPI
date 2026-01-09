@@ -1,58 +1,93 @@
 package ru.joutak.minigames.lobby
 
 import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Material
 import org.bukkit.NamespacedKey
 import org.bukkit.entity.Player
 import org.bukkit.inventory.ItemFlag
 import org.bukkit.inventory.ItemStack
+import org.bukkit.inventory.PlayerInventory
 import org.bukkit.persistence.PersistentDataType
+import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.managers.MatchmakingManager
 
 object LobbyItemsManager {
 
-    const val QUICK_READY_ID: String = "quick_ready"
-    const val TEAM_SELECT_ID: String = "team_select"
-    const val LOBBY_RETURN_ID: String = "lobby_return"
-
-    // 0-based hotbar indices. User asked "not in 1" -> avoid slot 0.
-    private const val QUICK_READY_SLOT: Int = 2
-    private const val TEAM_SELECT_SLOT: Int = 4
-    private const val LOBBY_RETURN_SLOT: Int = 6
-
     // IMPORTANT: use stable namespace so it works even if API is shaded into another plugin.
     private val key: NamespacedKey = NamespacedKey("minigames", "lobby_item")
+    private val legacy: LegacyComponentSerializer = LegacyComponentSerializer.legacyAmpersand()
 
-    fun isLobbyItem(item: ItemStack?): Boolean {
-        if (item == null || item.type == Material.AIR) return false
-        val meta = item.itemMeta ?: return false
-        return meta.persistentDataContainer.has(key, PersistentDataType.STRING)
+    sealed interface LobbyAction {
+        data object Ready : LobbyAction
+        data object TeamSelect : LobbyAction
+        data class Command(
+            val command: String,
+            val denyMessage: Component? = null,
+        ) : LobbyAction
     }
 
-    fun getLobbyItemId(item: ItemStack?): String? {
-        if (item == null || item.type == Material.AIR) return null
-        val meta = item.itemMeta ?: return null
-        return meta.persistentDataContainer.get(key, PersistentDataType.STRING)
+    data class LobbyItemDef(
+        val id: String,
+        val slot: Int,
+        val material: Material,
+        val name: Component,
+        val lore: List<Component>,
+        val action: LobbyAction,
+        val enabled: Boolean,
+    )
+
+    @Volatile
+    private var cacheEnabled: Boolean = true
+
+    @Volatile
+    private var cacheById: Map<String, LobbyItemDef> = emptyMap()
+
+    @Volatile
+    private var cacheBySlot: Map<Int, LobbyItemDef> = emptyMap()
+
+    /**
+     * Reload lobby items definitions from config.
+     * Safe to call multiple times.
+     */
+    fun reloadFromConfig() {
+        cacheEnabled = MiniGamesCore.configuration.get(ConfigKeys.LOBBY_ITEMS_ENABLED)
+
+        val rawList = MiniGamesCore.configuration.get(ConfigKeys.LOBBY_HOTBAR_ITEMS)
+        val defs = parseHotbar(rawList)
+
+        cacheById = defs.associateBy { it.id }
+        cacheBySlot = defs.associateBy { it.slot }
     }
 
     fun ensure(player: Player) {
+        // Do not allow lobby items inside started games.
         if (MatchmakingManager.isPlayerInStartedGame(player.uniqueId)) {
             remove(player)
             return
         }
 
-        // Always keep lobby items consistent (also fixes "moved/changed" items).
+        if (cacheById.isEmpty()) {
+            reloadFromConfig()
+        }
+
+        if (!cacheEnabled) {
+            remove(player)
+            return
+        }
+
+        // Replace old lobby items with the configured set.
         remove(player)
-        apply(player)
-    }
 
-    fun apply(player: Player) {
         val inv = player.inventory
+        for ((slot, def) in cacheBySlot) {
+            if (!def.enabled) continue
+            if (slot !in 0..8) continue
 
-        placeFixed(inv, QUICK_READY_SLOT, createQuickReadyItem())
-        placeFixed(inv, TEAM_SELECT_SLOT, createTeamSelectItem())
-        placeFixed(inv, LOBBY_RETURN_SLOT, createLobbyReturnItem())
+            val item = createItem(def)
+            placeFixed(inv, slot, item)
+        }
     }
 
     fun remove(player: Player) {
@@ -65,53 +100,117 @@ object LobbyItemsManager {
         }
     }
 
-    private fun placeFixed(inv: org.bukkit.inventory.PlayerInventory, slot: Int, item: ItemStack) {
+    fun isLobbyItem(item: ItemStack?): Boolean {
+        if (item == null || item.type == Material.AIR) return false
+        val meta = item.itemMeta ?: return false
+        return meta.persistentDataContainer.has(key, PersistentDataType.STRING)
+    }
+
+    fun getLobbyItemId(item: ItemStack?): String? {
+        if (!isLobbyItem(item)) return null
+        val meta = item!!.itemMeta ?: return null
+        return meta.persistentDataContainer.get(key, PersistentDataType.STRING)
+    }
+
+    fun getActionForId(id: String): LobbyAction? = cacheById[id]?.action
+
+    private fun placeFixed(inv: PlayerInventory, slot: Int, item: ItemStack) {
         val existing = inv.getItem(slot)
         if (existing != null && existing.type != Material.AIR && !isLobbyItem(existing)) {
             val empty = inv.firstEmpty()
             if (empty != -1) {
                 inv.setItem(empty, existing)
             } else {
-                // No free slot: keep player's item and skip placing ours to avoid deleting items.
+                // No space: do not overwrite player's item.
                 return
             }
         }
         inv.setItem(slot, item)
     }
 
-    private fun createQuickReadyItem(): ItemStack {
-        val item = ItemStack(Material.EMERALD)
+    private fun createItem(def: LobbyItemDef): ItemStack {
+        val item = ItemStack(def.material)
         val meta = item.itemMeta
-        meta.displayName(Component.text("Готов", NamedTextColor.GREEN))
-        meta.lore(listOf(Component.text("Быстро встать в очередь", NamedTextColor.GRAY)))
+
+        meta.displayName(def.name)
+        if (def.lore.isNotEmpty()) meta.lore(def.lore)
+
         meta.isUnbreakable = true
         meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_UNBREAKABLE)
-        meta.persistentDataContainer.set(key, PersistentDataType.STRING, QUICK_READY_ID)
+
+        meta.persistentDataContainer.set(key, PersistentDataType.STRING, def.id)
+
         item.itemMeta = meta
         return item
     }
 
-    private fun createTeamSelectItem(): ItemStack {
-        val item = ItemStack(Material.NETHER_STAR)
-        val meta = item.itemMeta
-        meta.displayName(Component.text("Выбор команды", NamedTextColor.AQUA))
-        meta.lore(listOf(Component.text("Открыть меню выбора команды", NamedTextColor.GRAY)))
-        meta.isUnbreakable = true
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_UNBREAKABLE)
-        meta.persistentDataContainer.set(key, PersistentDataType.STRING, TEAM_SELECT_ID)
-        item.itemMeta = meta
-        return item
+    @Suppress("UNCHECKED_CAST")
+    private fun parseHotbar(rawList: List<Map<String, Any>>): List<LobbyItemDef> {
+        val defs = mutableListOf<LobbyItemDef>()
+
+        for (entry in rawList) {
+            val id = (entry["id"] as? String)?.trim()
+            if (id.isNullOrEmpty()) continue
+
+            val enabled = (entry["enabled"] as? Boolean) ?: true
+
+            val slotNum = when (val s = entry["slot"]) {
+                is Int -> s
+                is Number -> s.toInt()
+                is String -> s.toIntOrNull()
+                else -> null
+            } ?: continue
+
+            val matName = (entry["material"] as? String)?.trim()
+            val material = if (!matName.isNullOrEmpty()) {
+                Material.matchMaterial(matName, true)
+            } else null
+            val safeMaterial = material ?: Material.BARRIER
+
+            val nameRaw = (entry["name"] as? String) ?: id
+            val name = legacy.deserialize(nameRaw)
+
+            val loreRaw = entry["lore"]
+            val loreStrings: List<String> =
+                when (loreRaw) {
+                    is List<*> -> loreRaw.mapNotNull { it as? String }
+                    is String -> listOf(loreRaw)
+                    else -> emptyList()
+                }
+            val lore = loreStrings.map { legacy.deserialize(it) }
+
+            val actionMap = entry["action"] as? Map<*, *>
+            val action = parseAction(actionMap) ?: continue
+
+            defs += LobbyItemDef(
+                id = id,
+                slot = slotNum,
+                material = safeMaterial,
+                name = name,
+                lore = lore,
+                action = action,
+                enabled = enabled,
+            )
+        }
+
+        return defs
     }
 
-    private fun createLobbyReturnItem(): ItemStack {
-        val item = ItemStack(Material.COMPASS)
-        val meta = item.itemMeta
-        meta.displayName(Component.text("В лобби", NamedTextColor.YELLOW))
-        meta.lore(listOf(Component.text("Вернуться в лобби", NamedTextColor.GRAY)))
-        meta.isUnbreakable = true
-        meta.addItemFlags(ItemFlag.HIDE_ATTRIBUTES, ItemFlag.HIDE_UNBREAKABLE)
-        meta.persistentDataContainer.set(key, PersistentDataType.STRING, LOBBY_RETURN_ID)
-        item.itemMeta = meta
-        return item
+    private fun parseAction(actionMap: Map<*, *>?): LobbyAction? {
+        val type = (actionMap?.get("type") as? String)?.trim()?.uppercase() ?: return null
+
+        return when (type) {
+            "READY" -> LobbyAction.Ready
+            "TEAM_SELECT" -> LobbyAction.TeamSelect
+            "COMMAND" -> {
+                val cmd = (actionMap["command"] as? String)?.trim()
+                if (cmd.isNullOrEmpty()) return null
+
+                val deny = (actionMap["deny_message"] as? String)?.trim()
+                val denyComp = if (!deny.isNullOrEmpty()) legacy.deserialize(deny) else null
+                LobbyAction.Command(cmd, denyComp)
+            }
+            else -> null
+        }
     }
 }

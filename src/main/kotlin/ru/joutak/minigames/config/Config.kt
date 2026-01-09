@@ -21,7 +21,6 @@ class Config(
                     MiniGamesCore.plugin.logger.warning(
                         "Не найден ключ ${key.path} в конфиге! Взято стандартное значение: ${key.default}",
                     )
-                    configStorage.set(key.path, key.default)
                     key.default
                 } else {
                     configStorage.get(key.path)!!

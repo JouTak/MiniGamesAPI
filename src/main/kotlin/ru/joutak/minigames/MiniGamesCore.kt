@@ -77,26 +77,95 @@ object MiniGamesCore {
 
         plugin.logger.info("=== MiniGamesCore.initialize() END ===")
     }
-
     private val dataPath: Path
         get() = plugin.dataFolder.toPath()
 
-    private fun loadConfiguration() {
-        plugin.logger.info("Loading config...")
+    /**
+     * All MiniGamesAPI files live in a separate subfolder inside the host plugin's data folder:
+     * plugins/<HostPlugin>/minigamesapi/...
+     *
+     * This avoids conflicts with the minigame's own config.yml and other files.
+     */
+    private val apiConfigDir: Path
+        get() = dataPath.resolve("minigamesapi")
 
-        val configPath = dataPath.resolve("config.yml")
-        plugin.logger.info("Config path: $configPath (exists=${configPath.exists()})")
+    private fun loadConfiguration() {
+        plugin.logger.info("Loading MiniGamesAPI config...")
+
+        // Ensure plugin data folder exists.
+        plugin.dataFolder.mkdirs()
+
+        val configDir = apiConfigDir
+        configDir.toFile().mkdirs()
+
+        val configPath = configDir.resolve("config.yml")
+        val legacyPath = dataPath.resolve("config.yml")
+
+        plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
+
+        // Migration: if old config.yml exists in the root data folder, copy it into the API subfolder.
+        if (!configPath.exists() && legacyPath.exists()) {
+            try {
+                plugin.logger.warning("Found legacy config at $legacyPath. Copying it to $configPath (new location).")
+                java.nio.file.Files.copy(
+                    legacyPath,
+                    configPath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (e: Exception) {
+                plugin.logger.severe("Failed to copy legacy config.yml into API folder: $e")
+            }
+        }
 
         if (!configPath.exists()) {
-            plugin.logger.info("Config.yml not found, saving default...")
-            plugin.saveResource("config.yml", false)
+            plugin.logger.info("MiniGamesAPI config.yml not found, saving default to $configPath ...")
+            saveResourceFromApiJar("minigamesapi/config.yml", configPath)
         }
 
         val storage = YamlConfigStorage(configPath.toFile())
         configuration = Config(storage)
 
-        plugin.logger.info("Config loaded successfully.")
+        plugin.logger.info("MiniGamesAPI config loaded successfully.")
     }
+
+    private fun saveResourceFromApiJar(resourcePath: String, targetPath: Path) {
+        val loader = MiniGamesCore::class.java.classLoader
+
+        val directStream =
+            loader.getResourceAsStream(resourcePath)
+                ?: loader.getResourceAsStream(resourcePath.removePrefix("/"))
+
+        // Backward-compat only for config.yml: older jars may still have it in the root.
+        val stream =
+            directStream ?: if (resourcePath.endsWith("config.yml")) {
+                loader.getResourceAsStream("config.yml") ?: loader.getResourceAsStream("/config.yml")
+            } else {
+                null
+            }
+
+        if (stream == null) {
+            plugin.logger.severe("Resource not found in jar (tried: $resourcePath). Creating a minimal file at $targetPath.")
+            targetPath.toFile().parentFile?.mkdirs()
+
+            if (resourcePath.endsWith("config.yml")) {
+                targetPath.toFile().writeText("# MiniGamesAPI config (auto-generated)\n", Charsets.UTF_8)
+            } else {
+                targetPath.toFile().writeText("", Charsets.UTF_8)
+            }
+            return
+        }
+
+        stream.use { input ->
+            targetPath.toFile().parentFile?.mkdirs()
+            java.nio.file.Files.copy(
+                input,
+                targetPath,
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        }
+    }
+
+
 
     private fun loadDependencies() {
         val useLL = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
@@ -132,22 +201,66 @@ object MiniGamesCore {
         val minigameName = configuration.get(ConfigKeys.SPARTAKIAD_MINIGAME_NAME)
         plugin.logger.info("minigameName = $minigameName")
 
-        val gamePath = dataPath.resolve(minigameName)
-        plugin.logger.info("gamePath = $gamePath")
+        val apiDir = apiConfigDir
+        apiDir.toFile().mkdirs()
+
+        val gamePath = apiDir.resolve(minigameName)
+        val legacyGamePath = dataPath.resolve(minigameName)
+
+        // Migration: previously Spartakiad files lived in the root data folder.
+        if (!gamePath.exists() && legacyGamePath.exists()) {
+            try {
+                plugin.logger.warning("Found legacy Spartakiad folder at $legacyGamePath. Copying it to $gamePath (new location).")
+                gamePath.toFile().mkdirs()
+
+                val legacyDb = legacyGamePath.resolve("participants.db")
+                val newDb = gamePath.resolve("participants.db")
+                if (legacyDb.exists() && !newDb.exists()) {
+                    java.nio.file.Files.copy(
+                        legacyDb,
+                        newDb,
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                    )
+                }
+            } catch (e: Exception) {
+                plugin.logger.severe("Failed to migrate Spartakiad data into API folder: $e")
+            }
+        }
 
         gamePath.toFile().mkdirs()
-        plugin.logger.info("gamePath.mkdir() done")
-
-        val whitelistPath = dataPath.resolve("whitelist.yml")
-        plugin.logger.info("whitelistPath = $whitelistPath (exists=${whitelistPath.exists()})")
-
-        if (!whitelistPath.exists()) {
-            plugin.logger.info("whitelist.yml not found, creating empty...")
-            YamlConfiguration().save(whitelistPath.toFile())
-        }
+        plugin.logger.info("gamePath = $gamePath")
 
         val teamMode = configuration.get(ConfigKeys.SPARTAKIAD_TEAM_MODE)
         plugin.logger.info("team_mode = $teamMode")
+
+        val whitelistPath = apiDir.resolve("whitelist.yml")
+        val legacyWhitelistPath = dataPath.resolve("whitelist.yml")
+
+        if (!whitelistPath.exists() && legacyWhitelistPath.exists()) {
+            try {
+                plugin.logger.warning("Found legacy whitelist at $legacyWhitelistPath. Copying it to $whitelistPath (new location).")
+                java.nio.file.Files.copy(
+                    legacyWhitelistPath,
+                    whitelistPath,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (e: Exception) {
+                plugin.logger.severe("Failed to copy legacy whitelist.yml into API folder: $e")
+            }
+        }
+
+        if (!whitelistPath.exists()) {
+            plugin.logger.info("whitelist.yml not found in API folder, creating empty...")
+            val yaml = YamlConfiguration()
+            if (teamMode) {
+                yaml.set("teams", mapOf<String, Any>())
+            } else {
+                yaml.set("participants", emptyList<String>())
+            }
+            yaml.save(whitelistPath.toFile())
+        }
+
+        plugin.logger.info("whitelistPath = $whitelistPath (exists=${whitelistPath.exists()})")
 
         val whitelistStorage: WhitelistStorage =
             if (teamMode) {
