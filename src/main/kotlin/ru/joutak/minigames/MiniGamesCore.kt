@@ -19,6 +19,7 @@ import ru.joutak.minigames.listener.PlayerJoinListener
 import ru.joutak.minigames.listener.PlayerQuitListener
 import ru.joutak.minigames.listener.WhitelistChangeListener
 import ru.joutak.minigames.listener.WhitelistReloadListener
+import ru.joutak.minigames.gui.TeamSelectionGui
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.spartakiad.SpartakiadManager
 import ru.joutak.minigames.spartakiad.participant.storage.SqliteParticipantStorage
@@ -28,7 +29,11 @@ import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
+import java.io.File
+import java.io.FileOutputStream
+import java.io.InputStream
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.io.path.exists
 
 object MiniGamesCore {
@@ -77,95 +82,109 @@ object MiniGamesCore {
 
         plugin.logger.info("=== MiniGamesCore.initialize() END ===")
     }
+
     private val dataPath: Path
         get() = plugin.dataFolder.toPath()
 
     /**
-     * All MiniGamesAPI files live in a separate subfolder inside the host plugin's data folder:
-     * plugins/<HostPlugin>/minigamesapi/...
-     *
-     * This avoids conflicts with the minigame's own config.yml and other files.
+     * All MiniGamesAPI runtime files live here to avoid conflicts with the minigame's own config/data.
+     * Example when API is shaded into Splatoon: plugins/Splatoon/minigamesapi/
      */
-    private val apiConfigDir: Path
-        get() = dataPath.resolve("minigamesapi")
+    val apiDataFolder: File
+        get() = dataPath.resolve("minigamesapi").toFile()
+
+    val apiConfigFile: File
+        get() = File(apiDataFolder, "config.yml")
 
     private fun loadConfiguration() {
-        plugin.logger.info("Loading MiniGamesAPI config...")
+        plugin.logger.info("Loading config...")
 
-        // Ensure plugin data folder exists.
-        plugin.dataFolder.mkdirs()
+        if (!apiDataFolder.exists()) {
+            apiDataFolder.mkdirs()
+        }
 
-        val configDir = apiConfigDir
-        configDir.toFile().mkdirs()
+        val cfg = apiConfigFile
+        plugin.logger.info("MiniGamesAPI config path: ${cfg.absolutePath} (exists=${cfg.exists()})")
 
-        val configPath = configDir.resolve("config.yml")
-        val legacyPath = dataPath.resolve("config.yml")
-
-        plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
-
-        // Migration: if old config.yml exists in the root data folder, copy it into the API subfolder.
-        if (!configPath.exists() && legacyPath.exists()) {
-            try {
-                plugin.logger.warning("Found legacy config at $legacyPath. Copying it to $configPath (new location).")
-                java.nio.file.Files.copy(
-                    legacyPath,
-                    configPath,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+        if (!cfg.exists()) {
+            plugin.logger.info("MiniGamesAPI config not found, writing default to ${cfg.absolutePath}...")
+            writeDefaultApiConfig(cfg)
+        } else {
+            // If previous broken migration copied the minigame's config here, detect and fix.
+            if (!looksLikeApiConfig(cfg)) {
+                val backup = File(cfg.parentFile, "config.yml.bak.${System.currentTimeMillis()}")
+                plugin.logger.severe(
+                    "${cfg.absolutePath} does not look like a MiniGamesAPI config (likely copied from the minigame). " +
+                        "Backing up to ${backup.name} and writing a fresh MiniGamesAPI default config."
                 )
-            } catch (e: Exception) {
-                plugin.logger.severe("Failed to copy legacy config.yml into API folder: $e")
+                try {
+                    cfg.toPath().toFile().copyTo(backup, overwrite = true)
+                } catch (t: Throwable) {
+                    plugin.logger.severe("Failed to backup invalid config: ${t.message}")
+                }
+                writeDefaultApiConfig(cfg)
             }
         }
 
-        if (!configPath.exists()) {
-            plugin.logger.info("MiniGamesAPI config.yml not found, saving default to $configPath ...")
-            saveResourceFromApiJar("minigamesapi/config.yml", configPath)
-        }
-
-        val storage = YamlConfigStorage(configPath.toFile())
+        val storage = YamlConfigStorage(cfg)
         configuration = Config(storage)
 
-        plugin.logger.info("MiniGamesAPI config loaded successfully.")
+        // Reload config-driven UX providers once after config is ready.
+        LobbyItemsManager.reloadFromConfig()
+
+        plugin.logger.info("Config loaded successfully.")
     }
 
-    private fun saveResourceFromApiJar(resourcePath: String, targetPath: Path) {
-        val loader = MiniGamesCore::class.java.classLoader
+    private fun writeDefaultApiConfig(target: File) {
+        target.parentFile?.mkdirs()
 
-        val directStream =
-            loader.getResourceAsStream(resourcePath)
-                ?: loader.getResourceAsStream(resourcePath.removePrefix("/"))
-
-        // Backward-compat only for config.yml: older jars may still have it in the root.
-        val stream =
-            directStream ?: if (resourcePath.endsWith("config.yml")) {
-                loader.getResourceAsStream("config.yml") ?: loader.getResourceAsStream("/config.yml")
-            } else {
-                null
-            }
-
-        if (stream == null) {
-            plugin.logger.severe("Resource not found in jar (tried: $resourcePath). Creating a minimal file at $targetPath.")
-            targetPath.toFile().parentFile?.mkdirs()
-
-            if (resourcePath.endsWith("config.yml")) {
-                targetPath.toFile().writeText("# MiniGamesAPI config (auto-generated)\n", Charsets.UTF_8)
-            } else {
-                targetPath.toFile().writeText("", Charsets.UTF_8)
+        // IMPORTANT: do NOT use plugin.saveResource("config.yml"), because when API is shaded into a minigame,
+        // it would copy the minigame's config.yml. We load our own resource from classpath instead.
+        val resourcePath = "minigamesapi/config.yml"
+        val input: InputStream? = MiniGamesCore::class.java.classLoader.getResourceAsStream(resourcePath)
+        if (input == null) {
+            // Fallback minimal config if resource somehow missing.
+            plugin.logger.severe("Default MiniGamesAPI resource '$resourcePath' not found in classpath. Writing minimal config.")
+            FileOutputStream(target).use { out ->
+                out.write(
+                    (
+                        "minigamesapi:\n" +
+                            "  config_version: 1\n" +
+                            "uuid:\n" +
+                            "  use_libre_login: true\n" +
+                            "storage:\n" +
+                            "  debounce_millis: 500\n" +
+                            "  close_timeout_millis: 5000\n" +
+                            "spartakiad:\n" +
+                            "  enabled: false\n" +
+                            "  minigame_name: minigame\n" +
+                            "  attempts: 5\n" +
+                            "  team_mode: false\n"
+                    ).toByteArray(Charsets.UTF_8)
+                )
             }
             return
         }
 
-        stream.use { input ->
-            targetPath.toFile().parentFile?.mkdirs()
-            java.nio.file.Files.copy(
-                input,
-                targetPath,
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
-            )
+        input.use { ins ->
+            java.nio.file.Files.copy(ins, target.toPath(), StandardCopyOption.REPLACE_EXISTING)
         }
     }
 
-
+    private fun looksLikeApiConfig(file: File): Boolean {
+        return try {
+            val yaml = YamlConfiguration.loadConfiguration(file)
+            // New configs should have a sentinel, but accept older API configs too.
+            yaml.contains("minigamesapi.config_version") ||
+                yaml.contains("uuid.use_libre_login") ||
+                yaml.contains("spartakiad.enabled") ||
+                yaml.contains("storage.debounce_millis") ||
+                yaml.contains("lobby.items") ||
+                yaml.contains("teamselect.teams")
+        } catch (_: Throwable) {
+            false
+        }
+    }
 
     private fun loadDependencies() {
         val useLL = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
@@ -201,66 +220,22 @@ object MiniGamesCore {
         val minigameName = configuration.get(ConfigKeys.SPARTAKIAD_MINIGAME_NAME)
         plugin.logger.info("minigameName = $minigameName")
 
-        val apiDir = apiConfigDir
-        apiDir.toFile().mkdirs()
-
-        val gamePath = apiDir.resolve(minigameName)
-        val legacyGamePath = dataPath.resolve(minigameName)
-
-        // Migration: previously Spartakiad files lived in the root data folder.
-        if (!gamePath.exists() && legacyGamePath.exists()) {
-            try {
-                plugin.logger.warning("Found legacy Spartakiad folder at $legacyGamePath. Copying it to $gamePath (new location).")
-                gamePath.toFile().mkdirs()
-
-                val legacyDb = legacyGamePath.resolve("participants.db")
-                val newDb = gamePath.resolve("participants.db")
-                if (legacyDb.exists() && !newDb.exists()) {
-                    java.nio.file.Files.copy(
-                        legacyDb,
-                        newDb,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                    )
-                }
-            } catch (e: Exception) {
-                plugin.logger.severe("Failed to migrate Spartakiad data into API folder: $e")
-            }
-        }
+        val gamePath = apiDataFolder.toPath().resolve(minigameName)
+        plugin.logger.info("gamePath = $gamePath")
 
         gamePath.toFile().mkdirs()
-        plugin.logger.info("gamePath = $gamePath")
+        plugin.logger.info("gamePath.mkdir() done")
+
+        val whitelistPath = apiDataFolder.toPath().resolve("whitelist.yml")
+        plugin.logger.info("whitelistPath = $whitelistPath (exists=${whitelistPath.exists()})")
+
+        if (!whitelistPath.exists()) {
+            plugin.logger.info("whitelist.yml not found, creating empty...")
+            YamlConfiguration().save(whitelistPath.toFile())
+        }
 
         val teamMode = configuration.get(ConfigKeys.SPARTAKIAD_TEAM_MODE)
         plugin.logger.info("team_mode = $teamMode")
-
-        val whitelistPath = apiDir.resolve("whitelist.yml")
-        val legacyWhitelistPath = dataPath.resolve("whitelist.yml")
-
-        if (!whitelistPath.exists() && legacyWhitelistPath.exists()) {
-            try {
-                plugin.logger.warning("Found legacy whitelist at $legacyWhitelistPath. Copying it to $whitelistPath (new location).")
-                java.nio.file.Files.copy(
-                    legacyWhitelistPath,
-                    whitelistPath,
-                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
-                )
-            } catch (e: Exception) {
-                plugin.logger.severe("Failed to copy legacy whitelist.yml into API folder: $e")
-            }
-        }
-
-        if (!whitelistPath.exists()) {
-            plugin.logger.info("whitelist.yml not found in API folder, creating empty...")
-            val yaml = YamlConfiguration()
-            if (teamMode) {
-                yaml.set("teams", mapOf<String, Any>())
-            } else {
-                yaml.set("participants", emptyList<String>())
-            }
-            yaml.save(whitelistPath.toFile())
-        }
-
-        plugin.logger.info("whitelistPath = $whitelistPath (exists=${whitelistPath.exists()})")
 
         val whitelistStorage: WhitelistStorage =
             if (teamMode) {
@@ -316,6 +291,7 @@ object MiniGamesCore {
 
         // Lobby UX
         Bukkit.getPluginManager().registerEvents(LobbyItemsListener, plugin)
+        Bukkit.getPluginManager().registerEvents(TeamSelectionGui, plugin)
 
         // Helpful join message / cleanup
         Bukkit.getPluginManager().registerEvents(PlayerJoinListener, plugin)

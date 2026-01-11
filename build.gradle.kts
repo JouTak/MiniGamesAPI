@@ -71,6 +71,9 @@ tasks.processResources {
 
     inputs.properties(props)
     filteringCharset = "UTF-8"
+    // IMPORTANT: MiniGamesAPI не должен поставлять корневой config.yml, иначе при shading/merged resources
+    // он конфликтует с config.yml режима. Все ресурсы API лежат в подпапке minigamesapi/.
+    exclude("config.yml", "whitelist.yml", "participants.yml")
     filesMatching("plugin.yml") { expand(props) }
 }
 

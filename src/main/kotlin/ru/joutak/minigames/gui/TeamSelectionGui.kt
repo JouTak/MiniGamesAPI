@@ -4,6 +4,7 @@ package ru.joutak.minigames.gui
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
 import org.bukkit.Material
 import org.bukkit.entity.Player
@@ -16,58 +17,19 @@ import org.bukkit.inventory.ItemStack
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameQueue
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
-import ru.joutak.minigames.config.ConfigKeys
+import org.bukkit.configuration.file.YamlConfiguration
 
 object TeamSelectionGui : Listener {
 
     private val openInventories = mutableMapOf<Player, TeamSelectionData>()
 
-    
-private val legacy = LegacyComponentSerializer.legacyAmpersand()
+    private val amp: LegacyComponentSerializer = LegacyComponentSerializer.legacyAmpersand()
 
-private data class TeamUi(
-    val material: Material,
-    val color: NamedTextColor,
-    val customName: Component?,
-)
-
-@Suppress("UNCHECKED_CAST")
-private fun teamUiFor(index: Int): TeamUi {
-    val teamsRaw = MiniGamesCore.configuration.get(ConfigKeys.TEAMSELECT_TEAMS)
-    val entry = teamsRaw[(index + 1).toString()] as? Map<*, *>
-
-    val materialName = (entry?.get("material") as? String)?.trim()
-    val colorName = (entry?.get("color") as? String)?.trim()
-    val nameRaw = (entry?.get("name") as? String)?.trim()
-
-    val material = if (!materialName.isNullOrEmpty()) {
-        Material.matchMaterial(materialName, true)
-    } else null
-
-    val color = if (!colorName.isNullOrEmpty()) {
-        NamedTextColor.NAMES.value(colorName.lowercase())
-    } else null
-
-    val customName = if (!nameRaw.isNullOrEmpty()) legacy.deserialize(nameRaw) else null
-
-    return TeamUi(
-        material = material ?: Material.WHITE_WOOL,
-        color = color ?: NamedTextColor.WHITE,
-        customName = customName,
+    private data class TeamStyle(
+        val material: Material,
+        val color: NamedTextColor,
+        val displayName: Component?,
     )
-}
-
-private fun titleComponent(): Component {
-    val raw = MiniGamesCore.configuration.get(ConfigKeys.TEAMSELECT_TITLE)
-    return legacy.deserialize(raw)
-}
-
-
-
-    init {
-        Bukkit.getPluginManager().registerEvents(this, MiniGamesCore.plugin)
-    }
 
     data class TeamSelectionData(
         val inventory: Inventory,
@@ -77,11 +39,17 @@ private fun titleComponent(): Component {
 
     fun open(player: Player, instance: GameInstance, callback: (Player, Int) -> Unit) {
         val size = ((instance.teams.size - 1) / 9 + 1) * 9
-        val inventory = Bukkit.createInventory(null, size, titleComponent())
+        val yaml = YamlConfiguration.loadConfiguration(MiniGamesCore.apiConfigFile)
+        val title = yaml.getString("teamselect.title") ?: "&8Выбор команды"
+        val invTitle = org.bukkit.ChatColor.translateAlternateColorCodes('&', title)
+        val inventory = Bukkit.createInventory(null, size, invTitle)
+
 
         instance.teams.forEachIndexed { index, team ->
-            val ui = teamUiFor(index)
-            val item = ItemStack(ui.material)
+            val teamNumber = index + 1
+            val style = getTeamStyle(yaml, teamNumber)
+
+            val item = ItemStack(style.material)
 
             val meta = item.itemMeta
 
@@ -104,7 +72,9 @@ private fun titleComponent(): Component {
                 loreList.add(Component.text("Команда пуста", NamedTextColor.GRAY))
             }
 
-            meta.displayName((ui.customName ?: Component.text("Команда ${index + 1}", ui.color)).decorate(TextDecoration.BOLD))
+            val teamName = style.displayName
+                ?: Component.text("Команда $teamNumber", style.color).decorate(TextDecoration.BOLD)
+            meta.displayName(teamName)
             meta.lore(loreList)
 
             item.itemMeta = meta
@@ -113,6 +83,70 @@ private fun titleComponent(): Component {
 
         openInventories[player] = TeamSelectionData(inventory, instance, callback)
         player.openInventory(inventory)
+    }
+
+    private fun getTeamStyle(yaml: YamlConfiguration, teamNumber: Int): TeamStyle {
+        val base = "teamselect.teams.$teamNumber"
+
+        val materialName = yaml.getString("$base.material")?.trim()?.uppercase()
+        val material = materialName?.let { Material.matchMaterial(it) } ?: defaultTeamMaterial(teamNumber)
+
+        val colorName = yaml.getString("$base.color")?.trim()?.uppercase()
+        val color = parseNamedColor(colorName) ?: defaultTeamColor(teamNumber)
+
+        val nameStr = yaml.getString("$base.name")
+        val display = nameStr?.let { amp.deserialize(it) }
+
+        return TeamStyle(material, color, display)
+    }
+
+    private fun parseNamedColor(name: String?): NamedTextColor? {
+        if (name.isNullOrBlank()) return null
+        return NamedTextColor.NAMES.value(name.lowercase())
+    }
+
+    private fun defaultTeamMaterial(teamNumber: Int): Material {
+        return when (teamNumber) {
+            1 -> Material.RED_WOOL
+            2 -> Material.YELLOW_WOOL
+            3 -> Material.GREEN_WOOL
+            4 -> Material.BLUE_WOOL
+            5 -> Material.CYAN_WOOL
+            6 -> Material.PURPLE_WOOL
+            7 -> Material.ORANGE_WOOL
+            8 -> Material.LIGHT_BLUE_WOOL
+            9 -> Material.WHITE_WOOL
+            10 -> Material.BLACK_WOOL
+            11 -> Material.MAGENTA_WOOL
+            12 -> Material.LIME_WOOL
+            13 -> Material.PINK_WOOL
+            14 -> Material.BROWN_WOOL
+            15 -> Material.GRAY_WOOL
+            16 -> Material.LIGHT_GRAY_WOOL
+            else -> Material.WHITE_WOOL
+        }
+    }
+
+    private fun defaultTeamColor(teamNumber: Int): NamedTextColor {
+        return when (teamNumber) {
+            1 -> NamedTextColor.RED
+            2 -> NamedTextColor.YELLOW
+            3 -> NamedTextColor.GREEN
+            4 -> NamedTextColor.BLUE
+            5 -> NamedTextColor.AQUA
+            6 -> NamedTextColor.LIGHT_PURPLE
+            7 -> NamedTextColor.GOLD
+            8 -> NamedTextColor.DARK_AQUA
+            9 -> NamedTextColor.WHITE
+            10 -> NamedTextColor.BLACK
+            11 -> NamedTextColor.DARK_PURPLE
+            12 -> NamedTextColor.DARK_GREEN
+            13 -> NamedTextColor.LIGHT_PURPLE
+            14 -> NamedTextColor.DARK_RED
+            15 -> NamedTextColor.GRAY
+            16 -> NamedTextColor.DARK_GRAY
+            else -> NamedTextColor.WHITE
+        }
     }
 
     @EventHandler

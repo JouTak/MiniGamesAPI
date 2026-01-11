@@ -1,7 +1,5 @@
 package ru.joutak.minigames.listener
 
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.Bukkit
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -13,11 +11,12 @@ import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerDropItemEvent
 import org.bukkit.event.player.PlayerInteractEvent
-import org.bukkit.event.player.PlayerJoinEvent
 import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerSwapHandItemsEvent
 import org.bukkit.event.player.PlayerTeleportEvent
 import org.bukkit.inventory.EquipmentSlot
+import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.format.NamedTextColor
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.command.ready.ReadyCommand
 import ru.joutak.minigames.command.teamselect.TeamSelectCommand
@@ -35,7 +34,7 @@ object LobbyItemsListener : Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
-    fun onJoin(event: PlayerJoinEvent) {
+    fun onJoin(event: org.bukkit.event.player.PlayerJoinEvent) {
         ensureLater(event.player, 1L)
     }
 
@@ -113,10 +112,7 @@ object LobbyItemsListener : Listener {
         // Handle only click actions; ignore PHYSICAL/other interactions.
         val action = event.action
         if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK &&
-            action != Action.LEFT_CLICK_AIR && action != Action.LEFT_CLICK_BLOCK
-        ) {
-            return
-        }
+            action != Action.LEFT_CLICK_AIR && action != Action.LEFT_CLICK_BLOCK) return
 
         val player = event.player
 
@@ -135,19 +131,17 @@ object LobbyItemsListener : Listener {
 
         event.isCancelled = true
 
-        val actionToRun = LobbyItemsManager.getActionForId(id) ?: return
-
-        when (actionToRun) {
+        when (val actionToRun = LobbyItemsManager.getAction(id)) {
             LobbyItemsManager.LobbyAction.Ready -> ReadyCommand.performReady(player)
             LobbyItemsManager.LobbyAction.TeamSelect -> TeamSelectCommand.openTeamSelect(player)
             is LobbyItemsManager.LobbyAction.Command -> {
                 val ok = player.performCommand(actionToRun.command)
                 if (!ok) {
-                    player.sendMessage(
-                        actionToRun.denyMessage
-                            ?: Component.text("Команда недоступна.", NamedTextColor.RED)
-                    )
+                    player.sendMessage(actionToRun.denyMessage ?: Component.text("Команда недоступна.", NamedTextColor.RED))
                 }
+            }
+            null -> {
+                // Unknown id in config: ignore.
             }
         }
     }
