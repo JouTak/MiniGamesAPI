@@ -1,22 +1,163 @@
-# MiniGamesAPI config (stored under plugins/<HostPlugin>/minigamesapi/config.yml)
-# This file is separate from the host plugin's config.yml to avoid name conflicts.
+minigamesapi:
+  # Служебный маркер, чтобы отличать конфиг API от конфига режима.
+  config_version: 1
 
-# Name/key of the current game mode that uses MiniGamesAPI (used for match results, etc.)
 mode:
+  # Логическое имя режима (используется как mode_key в results и для кросс-режимной логики).
   name: "minigame"
 
-spartakiad:
-  enabled: false
-  minigame_name: "minigame"
-  attempts: 5
-  team_mode: false
-
 uuid:
+  # Использовать LibreLogin UUID (через reflection). Если LibreLogin не установлен — будет fallback на Bukkit UUID.
   use_libre_login: true
 
 storage:
+  # Дебаунс записи YAML-конфига (мс)
   debounce_millis: 500
+  # Таймаут graceful-shutdown для фонового writer thread (мс)
   close_timeout_millis: 5000
 
-teams:
-  players_file: "teams.txt"
+spartakiad:
+  # Включить спартакиадку (whitelist + attempts + победители)
+  enabled: false
+  # Название режима/папки для данных спартакиады внутри plugins/<Plugin>/minigamesapi/
+  minigame_name: "minigame"
+  # Количество попыток по умолчанию
+  attempts: 5
+  # team_mode=true: whitelist.yml трактуется как команды (teamlist), иначе как список ников
+  team_mode: false
+
+matchmaking:
+  start:
+    # Разрешить старт матча при неполном инстансе (как в BedWars/CreakyWars), если достигнут порог.
+    # Полный инстанс ВСЕГДА стартует как раньше.
+    enabled: false
+
+    # Минимальная доля заполнения (0.0..1.0) для старта.
+    # Пример: 0.5 значит "стартуем, когда занята хотя бы половина слотов".
+    min_fill_percent: 1.0
+
+    # Минимальное количество непустых команд для старта.
+    # Порог по игрокам: ceil(maxPlayers * min_fill_percent) в пределах [1..maxPlayers]. Дополнительно требуется min_teams непустых команд.
+    min_teams: 2
+
+    # Задержка (сек), в течение которой порог должен удерживаться.
+    # Если игроков/команд стало меньше порога — старт отменяется.
+    delay_seconds: 0
+
+    # Громкие сообщения в чат участникам ожидания (как в CreakyWars):
+    # "до начала игры ... если не наберётся полный матч".
+    announce:
+      enabled: true
+      # Как часто писать в чат (сек). В последние last_seconds_always секунд пишет каждый тик.
+      interval_seconds: 5
+      last_seconds_always: 5
+      # Поддерживаемые плейсхолдеры: {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
+      message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e — стартуем."
+      cancelled_message: "&cСтарт отменён: недостаточно игроков или команд."
+      ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
+
+lobby:
+  items:
+    enabled: true
+    # Настраиваемые предметы в хотбаре лобби.
+    # Служебный id кладётся в PDC и используется LobbyItemsListener.
+    hotbar:
+      - id: quick_ready
+        enabled: true
+        slot: 2
+        material: EMERALD
+        name: "&aГотов"
+        lore:
+          - "&7Быстро встать в очередь"
+        action:
+          type: READY
+      - id: team_select
+        enabled: true
+        slot: 4
+        material: NETHER_STAR
+        name: "&bВыбор команды"
+        lore:
+          - "&7Открыть меню выбора команды"
+        action:
+          type: TEAM_SELECT
+      - id: lobby_return
+        enabled: true
+        slot: 6
+        material: COMPASS
+        name: "&eВ лобби"
+        lore:
+          - "&7Вернуться в лобби"
+        action:
+          type: COMMAND
+          command: "lobby"
+          deny_message: "&cКоманда недоступна."
+
+teamselect:
+  title: "&8Выбор команды"
+  # Настройки GUI выбора команды (1..16).
+  # Важно: количество команд всё равно задаётся конфигом инстанса арены (GameInstanceConfig).
+  teams:
+    "1":
+      name: "&cКоманда 1"
+      material: RED_WOOL
+      color: RED
+    "2":
+      name: "&eКоманда 2"
+      material: YELLOW_WOOL
+      color: YELLOW
+    "3":
+      name: "&aКоманда 3"
+      material: GREEN_WOOL
+      color: GREEN
+    "4":
+      name: "&9Команда 4"
+      material: BLUE_WOOL
+      color: BLUE
+    "5":
+      name: "&bКоманда 5"
+      material: CYAN_WOOL
+      color: AQUA
+    "6":
+      name: "&dКоманда 6"
+      material: PURPLE_WOOL
+      color: LIGHT_PURPLE
+    "7":
+      name: "&6Команда 7"
+      material: ORANGE_WOOL
+      color: GOLD
+    "8":
+      name: "&3Команда 8"
+      material: LIGHT_BLUE_WOOL
+      color: DARK_AQUA
+    "9":
+      name: "&fКоманда 9"
+      material: WHITE_WOOL
+      color: WHITE
+    "10":
+      name: "&0Команда 10"
+      material: BLACK_WOOL
+      color: BLACK
+    "11":
+      name: "&5Команда 11"
+      material: MAGENTA_WOOL
+      color: DARK_PURPLE
+    "12":
+      name: "&2Команда 12"
+      material: LIME_WOOL
+      color: DARK_GREEN
+    "13":
+      name: "&dКоманда 13"
+      material: PINK_WOOL
+      color: LIGHT_PURPLE
+    "14":
+      name: "&4Команда 14"
+      material: BROWN_WOOL
+      color: DARK_RED
+    "15":
+      name: "&7Команда 15"
+      material: GRAY_WOOL
+      color: GRAY
+    "16":
+      name: "&8Команда 16"
+      material: LIGHT_GRAY_WOOL
+      color: DARK_GRAY
