@@ -1,0 +1,33 @@
+# MiniGamesAPI — конфиг сохранения результатов матчей (общая база для всех режимов)
+#
+# Файл лежит рядом с minigamesapi/config.yml:
+# plugins/<HostPlugin>/minigamesapi/results.yml
+#
+# По умолчанию сохранение ВЫКЛЮЧЕНО.
+
+results:
+  # Включить сохранение результатов матчей в общую БД.
+  enabled: false
+
+  # Идентификатор сервера (если несколько серверов пишут в одну БД).
+  server_id: "server-1"
+
+  # Если true — API попытается создать таблицы при старте (если их ещё нет).
+  schema:
+    auto_create: true
+
+  # JDBC-подключение. Пока пусто — ничего не записываем.
+  jdbc:
+    # Пример MySQL: "jdbc:mysql://127.0.0.1:3306/minigames?useSSL=false&characterEncoding=utf8"
+    # Пример PostgreSQL: "jdbc:postgresql://127.0.0.1:5432/minigames"
+    # Пример SQLite (НЕ рекомендуется как "общая" БД): "jdbc:sqlite:/absolute/path/minigames.db"
+    url: ""
+    username: ""
+    password: ""
+
+    # Опционально: явный драйвер (например "com.mysql.cj.jdbc.Driver").
+    # Обычно можно оставить пустым, если драйвер уже есть в classpath.
+    driver: ""
+
+    # Таймаут подключения (сек).
+    connect_timeout_seconds: 5

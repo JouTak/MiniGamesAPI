@@ -3,6 +3,12 @@ package ru.joutak.minigames.config
 object ConfigKeys {
     private val configKeys = mutableSetOf<ConfigKey<*>>()
 
+    /**
+     * Logical mode name (used as mode_key for results database and other cross-mode integrations).
+     * Example: "splatoon", "creakywars".
+     */
+    val MODE_NAME = object : ConfigKey<String>("mode.name", "minigame") {}
+
     val SPARTAKIAD_ENABLED = object : ConfigKey<Boolean>("spartakiad.enabled", false) {}
     val SPARTAKIAD_MINIGAME_NAME = object : ConfigKey<String>("spartakiad.minigame_name", "minigame".lowercase()) {}
     val SPARTAKIAD_ATTEMPTS = object : ConfigKey<Int>("spartakiad.attempts", 5) {}
@@ -59,45 +65,50 @@ object ConfigKeys {
      * How often to announce countdown in chat (seconds). Example: 5 -> every 5 seconds.
      * The last [MATCHMAKING_START_ANNOUNCE_LAST_SECONDS_ALWAYS] seconds are announced every second.
      */
-    val MATCHMAKING_START_ANNOUNCE_INTERVAL_SECONDS = object : ConfigKey<Int>("matchmaking.start.announce.interval_seconds", 5) {
-        override fun validate(value: Int) {
-            require(value >= 1) { "matchmaking.start.announce.interval_seconds must be >= 1" }
+    val MATCHMAKING_START_ANNOUNCE_INTERVAL_SECONDS =
+        object : ConfigKey<Int>("matchmaking.start.announce.interval_seconds", 5) {
+            override fun validate(value: Int) {
+                require(value >= 1) { "matchmaking.start.announce.interval_seconds must be >= 1" }
+            }
         }
-    }
 
     /**
      * During the last N seconds of countdown, announcements are sent every second.
      */
-    val MATCHMAKING_START_ANNOUNCE_LAST_SECONDS_ALWAYS = object : ConfigKey<Int>("matchmaking.start.announce.last_seconds_always", 5) {
-        override fun validate(value: Int) {
-            require(value >= 0) { "matchmaking.start.announce.last_seconds_always must be >= 0" }
+    val MATCHMAKING_START_ANNOUNCE_LAST_SECONDS_ALWAYS =
+        object : ConfigKey<Int>("matchmaking.start.announce.last_seconds_always", 5) {
+            override fun validate(value: Int) {
+                require(value >= 0) { "matchmaking.start.announce.last_seconds_always must be >= 0" }
+            }
         }
-    }
 
     /**
      * Countdown message template. Supports placeholders:
      * {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
      */
-    val MATCHMAKING_START_ANNOUNCE_MESSAGE = object : ConfigKey<String>(
-        "matchmaking.start.announce.message",
-        "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
-    ) {}
+    val MATCHMAKING_START_ANNOUNCE_MESSAGE =
+        object : ConfigKey<String>(
+            "matchmaking.start.announce.message",
+            "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
+        ) {}
 
     /**
      * Message when countdown is cancelled (players/teams dropped below threshold).
      */
-    val MATCHMAKING_START_ANNOUNCE_CANCELLED_MESSAGE = object : ConfigKey<String>(
-        "matchmaking.start.announce.cancelled_message",
-        "&cСтарт отменён: недостаточно игроков или команд."
-    ) {}
+    val MATCHMAKING_START_ANNOUNCE_CANCELLED_MESSAGE =
+        object : ConfigKey<String>(
+            "matchmaking.start.announce.cancelled_message",
+            "&cСтарт отменён: недостаточно игроков или команд."
+        ) {}
 
     /**
      * Message when instance becomes ready via partial-start (not full, but threshold reached).
      */
-    val MATCHMAKING_START_ANNOUNCE_READY_MESSAGE = object : ConfigKey<String>(
-        "matchmaking.start.announce.ready_message",
-        "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
-    ) {}
+    val MATCHMAKING_START_ANNOUNCE_READY_MESSAGE =
+        object : ConfigKey<String>(
+            "matchmaking.start.announce.ready_message",
+            "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
+        ) {}
 
     fun register(key: ConfigKey<*>) {
         configKeys += key
