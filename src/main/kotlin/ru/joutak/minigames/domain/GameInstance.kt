@@ -12,6 +12,12 @@ class GameInstance(val config: GameInstanceConfig) {
     val teams = MutableList(config.teamCount) { mutableListOf<Player>() }
 
     /**
+     * Round-robin cursor for /ready (and lobby hotbar READY action).
+     * It is intentionally per-instance to distribute players across teams evenly.
+     */
+    private var readyRoundRobinCursor: Int = 0
+
+    /**
      * "Started" means the match has begun and this instance is not available for matchmaking.
      */
     @Volatile
@@ -44,7 +50,26 @@ class GameInstance(val config: GameInstanceConfig) {
     }
 
     /**
-     * Add to specific team index (used by /ready "first free team" and GUI).
+     * Picks the next team index using round-robin among teams that still have free slots.
+     * Returns null if no teams have free slots.
+     */
+    fun pickTeamIndexRoundRobin(): Int? {
+        if (started) return null
+        if (teams.isEmpty()) return null
+
+        val n = teams.size
+        for (offset in 0 until n) {
+            val idx = (readyRoundRobinCursor + offset) % n
+            if (teams[idx].size < config.playersPerTeam) {
+                readyRoundRobinCursor = (idx + 1) % n
+                return idx
+            }
+        }
+        return null
+    }
+
+    /**
+     * Add to specific team index (used by /ready and GUI).
      */
     fun addPlayerToTeamIndex(player: Player, teamIndex: Int): Boolean {
         if (started) return false

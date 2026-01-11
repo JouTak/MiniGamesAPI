@@ -28,7 +28,8 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
     }
 
     /**
-     * "Быстрое добавление" — в первую свободную команду (по индексу) первой доступной арены.
+     * "Быстрое добавление" — round-robin по командам (а не "первая свободная"),
+     * чтобы при большом числе команд игроки распределялись равномерно.
      * Возвращает true, если игрок был добавлен в ожидание.
      */
     fun performReady(player: Player): Boolean {
@@ -50,9 +51,9 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
             return false
         }
 
-        // Первая свободная команда
-        val teamIndex = instance.teams.indexOfFirst { it.size < instance.config.playersPerTeam }
-        if (teamIndex == -1) {
+        // Round-robin по командам.
+        val teamIndex = instance.pickTeamIndexRoundRobin()
+        if (teamIndex == null) {
             player.sendMessage(Component.text("Нет свободных мест в командах. Ожидайте.", NamedTextColor.YELLOW))
             return false
         }

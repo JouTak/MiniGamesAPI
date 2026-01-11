@@ -14,7 +14,7 @@ object ConfigKeys {
     val STORAGE_CLOSE_TIMEOUT_MILLIS = object : ConfigKey<Long>("storage.close_timeout_millis", 5000) {}
 
     /**
-     * Allows starting a match when the instance isn't full, but has enough players.
+     * Allows starting a match when the instance isn't full, but has enough players/teams.
      * This is useful for modes like BedWars/CreakyWars.
      */
     val MATCHMAKING_START_ENABLED = object : ConfigKey<Boolean>("matchmaking.start.enabled", false) {}
@@ -31,12 +31,12 @@ object ConfigKeys {
     }
 
     /**
-     * Minimal absolute player count to allow a start.
-     * The effective required count is: max(min_players, ceil(maxPlayers * min_fill_percent)), clamped to [1, maxPlayers].
+     * Minimal number of non-empty teams required to allow a start.
+     * Example: 2 means "at least two teams must have at least one player".
      */
-    val MATCHMAKING_START_MIN_PLAYERS = object : ConfigKey<Int>("matchmaking.start.min_players", 2) {
+    val MATCHMAKING_START_MIN_TEAMS = object : ConfigKey<Int>("matchmaking.start.min_teams", 2) {
         override fun validate(value: Int) {
-            require(value >= 1) { "matchmaking.start.min_players must be >= 1" }
+            require(value >= 1) { "matchmaking.start.min_teams must be >= 1" }
         }
     }
 
@@ -76,19 +76,19 @@ object ConfigKeys {
 
     /**
      * Countdown message template. Supports placeholders:
-     * {seconds}, {current}, {max}, {required}
+     * {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
      */
     val MATCHMAKING_START_ANNOUNCE_MESSAGE = object : ConfigKey<String>(
         "matchmaking.start.announce.message",
-        "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e) — стартуем."
+        "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
     ) {}
 
     /**
-     * Message when countdown is cancelled (players dropped below threshold).
+     * Message when countdown is cancelled (players/teams dropped below threshold).
      */
     val MATCHMAKING_START_ANNOUNCE_CANCELLED_MESSAGE = object : ConfigKey<String>(
         "matchmaking.start.announce.cancelled_message",
-        "&cСтарт отменён: недостаточно игроков."
+        "&cСтарт отменён: недостаточно игроков или команд."
     ) {}
 
     /**
@@ -96,7 +96,7 @@ object ConfigKeys {
      */
     val MATCHMAKING_START_ANNOUNCE_READY_MESSAGE = object : ConfigKey<String>(
         "matchmaking.start.announce.ready_message",
-        "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a)."
+        "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
     ) {}
 
     fun register(key: ConfigKey<*>) {

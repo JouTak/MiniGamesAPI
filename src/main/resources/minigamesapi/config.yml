@@ -24,20 +24,20 @@ spartakiad:
 
 matchmaking:
   start:
-    # Разрешить старт матча при неполном инстансе (как в BedWars/CreakyWars), если достигнут порог игроков.
+    # Разрешить старт матча при неполном инстансе (как в BedWars/CreakyWars), если достигнут порог.
     # Полный инстанс ВСЕГДА стартует как раньше.
-    enabled: true
+    enabled: false
 
     # Минимальная доля заполнения (0.0..1.0) для старта.
     # Пример: 0.5 значит "стартуем, когда занята хотя бы половина слотов".
     min_fill_percent: 1.0
 
-    # Абсолютный минимум игроков для старта.
-    # Итоговый порог: max(min_players, ceil(maxPlayers * min_fill_percent)), в пределах [1..maxPlayers].
-    min_players: 2
+    # Минимальное количество непустых команд для старта.
+    # Порог по игрокам: ceil(maxPlayers * min_fill_percent) в пределах [1..maxPlayers]. Дополнительно требуется min_teams непустых команд.
+    min_teams: 2
 
     # Задержка (сек), в течение которой порог должен удерживаться.
-    # Если игроков стало меньше порога — старт отменяется.
+    # Если игроков/команд стало меньше порога — старт отменяется.
     delay_seconds: 0
 
     # Громкие сообщения в чат участникам ожидания (как в CreakyWars):
@@ -47,10 +47,10 @@ matchmaking:
       # Как часто писать в чат (сек). В последние last_seconds_always секунд пишет каждый тик.
       interval_seconds: 5
       last_seconds_always: 5
-      # Поддерживаемые плейсхолдеры: {seconds}, {current}, {max}, {required}
-      message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e) — стартуем."
-      cancelled_message: "&cСтарт отменён: недостаточно игроков."
-      ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a)."
+      # Поддерживаемые плейсхолдеры: {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
+      message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
+      cancelled_message: "&cСтарт отменён: недостаточно игроков или команд."
+      ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
 
 lobby:
   items:

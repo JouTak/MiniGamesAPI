@@ -43,9 +43,12 @@ object MatchmakingManager {
         val maxPlayers: Int,
         val waitingPlayers: Int,
         val requiredPlayers: Int,
+        val waitingTeams: Int,
+        val requiredTeams: Int,
         val delaySeconds: Int
     ) {
-        val eligible: Boolean get() = waitingPlayers >= requiredPlayers
+        val eligible: Boolean get() =
+            waitingPlayers >= requiredPlayers && waitingTeams >= requiredTeams
     }
 
     fun loadInstances(configs: List<GameInstanceConfig>) {
@@ -191,11 +194,14 @@ object MatchmakingManager {
         val enabled = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ENABLED)
         val maxPlayers = max(1, instance.config.teamCount * instance.config.playersPerTeam)
         val waitingPlayers = instance.teams.sumOf { it.size }
+        val waitingTeams = instance.teams.count { it.isNotEmpty() }
 
         val percent = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_MIN_FILL_PERCENT)
-        val minPlayers = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_MIN_PLAYERS)
         val requiredByPercent = ceil(maxPlayers * percent).toInt()
-        val required = min(maxPlayers, max(1, max(minPlayers, requiredByPercent)))
+        val requiredPlayers = min(maxPlayers, max(1, requiredByPercent))
+
+        val cfgMinTeams = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_MIN_TEAMS)
+        val requiredTeams = min(instance.config.teamCount, max(1, cfgMinTeams))
 
         val delaySeconds = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_DELAY_SECONDS)
 
@@ -203,7 +209,9 @@ object MatchmakingManager {
             enabled = enabled,
             maxPlayers = maxPlayers,
             waitingPlayers = waitingPlayers,
-            requiredPlayers = required,
+            requiredPlayers = requiredPlayers,
+            waitingTeams = waitingTeams,
+            requiredTeams = requiredTeams,
             delaySeconds = delaySeconds
         )
     }
@@ -320,7 +328,9 @@ object MatchmakingManager {
                 "seconds" to remainingSeconds.toString(),
                 "current" to info.waitingPlayers.toString(),
                 "max" to info.maxPlayers.toString(),
-                "required" to info.requiredPlayers.toString()
+                "required" to info.requiredPlayers.toString(),
+                "teams_current" to info.waitingTeams.toString(),
+                "teams_required" to info.requiredTeams.toString()
             )
         )
 
@@ -338,7 +348,9 @@ object MatchmakingManager {
             mapOf(
                 "current" to info.waitingPlayers.toString(),
                 "max" to info.maxPlayers.toString(),
-                "required" to info.requiredPlayers.toString()
+                "required" to info.requiredPlayers.toString(),
+                "teams_current" to info.waitingTeams.toString(),
+                "teams_required" to info.requiredTeams.toString()
             )
         )
 
@@ -361,7 +373,9 @@ object MatchmakingManager {
             mapOf(
                 "current" to info.waitingPlayers.toString(),
                 "max" to info.maxPlayers.toString(),
-                "required" to info.requiredPlayers.toString()
+                "required" to info.requiredPlayers.toString(),
+                "teams_current" to info.waitingTeams.toString(),
+                "teams_required" to info.requiredTeams.toString()
             )
         )
 
