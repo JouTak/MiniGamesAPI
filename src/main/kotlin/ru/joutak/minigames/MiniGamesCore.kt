@@ -508,6 +508,10 @@ spartakiad:
   team_mode: false
 
 matchmaking:
+  # Pool size multiplier: how many identical instances to keep available per configured arena.
+  # Example: if a mode loads 1 arena config for map "game" and this is 3, you can run up to 3 parallel matches.
+  instance_pool_size: 1
+
   start:
     enabled: false
     min_fill_percent: 1.0

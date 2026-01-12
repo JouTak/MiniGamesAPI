@@ -32,6 +32,20 @@ object ConfigKeys {
     val MATCHMAKING_START_ENABLED = object : ConfigKey<Boolean>("matchmaking.start.enabled", false) {}
 
     /**
+     * How many identical lobbies/instances to keep available per configured arena.
+     *
+     * This is a server-side "pool size" multiplier: if your mode loads 1 instance config for map "game",
+     * and this value is 3, matchmaking will allow up to 3 parallel matches based on the same map config.
+     *
+     * Default: 1 (old behavior).
+     */
+    val MATCHMAKING_INSTANCE_POOL_SIZE = object : ConfigKey<Int>("matchmaking.instance_pool_size", 1) {
+        override fun validate(value: Int) {
+            require(value >= 1) { "matchmaking.instance_pool_size must be >= 1" }
+        }
+    }
+
+    /**
      * Minimal fraction (0.0..1.0) of instance capacity to allow a start.
      * Example: 0.5 means "start when at least half of slots are occupied".
      * IMPORTANT: full instance always starts regardless of this setting.

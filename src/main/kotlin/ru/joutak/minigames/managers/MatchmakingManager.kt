@@ -60,7 +60,20 @@ object MatchmakingManager {
 
         activeInstances.clear()
         readyQueue.clear()
-        activeInstances += configs.map { GameInstance(it) }
+
+        val globalPoolSize = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_INSTANCE_POOL_SIZE)
+            .coerceAtLeast(1)
+
+        // Expand each configured instance into a pool of identical instances.
+        // This allows running multiple matches in parallel even if the mode provides only one map config.
+        // Per-config override (optional): meta["pool_size"] = Int
+        for (cfg in configs) {
+            val perConfig = ((cfg.meta["pool_size"] as? Number)?.toInt() ?: globalPoolSize).coerceAtLeast(1)
+            repeat(perConfig) {
+                activeInstances += GameInstance(cfg)
+            }
+        }
+
         QueueBossBarManager.updateAll()
     }
 
