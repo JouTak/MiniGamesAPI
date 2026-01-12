@@ -1,0 +1,81 @@
+messages:
+  # Prefix for all API technical messages. Placeholders: {mode_display}
+  prefix: "&7[&b{mode_display}&7] "
+
+  common:
+    only_players: "&cЭта команда доступна только игрокам."
+
+  join:
+    help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
+
+  lobby:
+    command_unavailable: "&cКоманда недоступна."
+
+  ready:
+    in_game: "&cВы уже в игре."
+    already_in_queue: "&eВы уже в очереди."
+    no_free_arenas: "&cНет свободных арен."
+    no_free_slots: "&cНет свободных слотов."
+    failed: "&cНе удалось добавить вас в очередь."
+    added: "&aВы добавлены в очередь. Команда: &f{team}"
+
+  unready:
+    removed: "&aВы покинули очередь."
+    not_in_queue: "&eВы не в очереди."
+
+  teamselect:
+    in_game: "&cВы уже в игре."
+    no_free_arenas: "&cНет свободных арен."
+    choose_team: "&eВыберите команду."
+    match_already_started: "&cМатч уже начался."
+    team_full: "&cКоманда заполнена."
+    added: "&aВы выбрали команду &f{team}&a."
+
+  forcerun:
+    no_instances: "&cНет активных инстансов."
+    will_start: "&aИнстанс поставлен на старт."
+
+  matchmaking:
+    start:
+      announce:
+        # Placeholders: {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
+        message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
+        cancelled_message: "&cСтарт отменён: недостаточно игроков или команд."
+        ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
+
+ui:
+  teamselect:
+    title: "&8Выбор команды"
+    teams:
+      "1": { name: "&cКоманда 1" }
+      "2": { name: "&eКоманда 2" }
+      "3": { name: "&aКоманда 3" }
+      "4": { name: "&9Команда 4" }
+      "5": { name: "&bКоманда 5" }
+      "6": { name: "&dКоманда 6" }
+      "7": { name: "&6Команда 7" }
+      "8": { name: "&3Команда 8" }
+      "9": { name: "&fКоманда 9" }
+      "10": { name: "&0Команда 10" }
+      "11": { name: "&5Команда 11" }
+      "12": { name: "&2Команда 12" }
+      "13": { name: "&dКоманда 13" }
+      "14": { name: "&4Команда 14" }
+      "15": { name: "&7Команда 15" }
+      "16": { name: "&8Команда 16" }
+
+  lobby:
+    items:
+      quick_ready:
+        name: "&aГотов"
+        lore:
+          - "&7Быстро встать в очередь"
+      team_select:
+        name: "&bВыбор команды"
+        lore:
+          - "&7Открыть меню выбора команды"
+      lobby_return:
+        name: "&eВ лобби"
+        lore:
+          - "&7Вернуться в лобби"
+        deny_message: "&cКоманда недоступна."
