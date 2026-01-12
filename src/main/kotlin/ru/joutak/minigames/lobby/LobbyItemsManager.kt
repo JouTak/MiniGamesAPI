@@ -12,6 +12,7 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.PlayerInventory
 import org.bukkit.persistence.PersistentDataType
 import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
 
 object LobbyItemsManager {
@@ -148,15 +149,26 @@ object LobbyItemsManager {
             val materialName = (raw["material"] as? String)?.trim()?.uppercase()
             val material = materialName?.let { Material.matchMaterial(it) } ?: continue
 
-            val name = (raw["name"] as? String)?.let { amp.deserialize(it) }
-                ?: Component.text(id, NamedTextColor.WHITE)
+            val msgBase = "ui.lobby.items.$id"
 
-            val lore = (raw["lore"] as? List<*>)
-                ?.mapNotNull { it as? String }
-                ?.map { amp.deserialize(it) }
-                ?: emptyList()
+            val nameStr = Messages.getString("$msgBase.name") ?: (raw["name"] as? String)
+            val name = nameStr?.let { amp.deserialize(it) } ?: Component.text(id, NamedTextColor.WHITE)
 
-            val action = parseAction(raw["action"]) ?: continue
+            val loreStrings = when {
+                Messages.has("$msgBase.lore") -> Messages.getStringList("$msgBase.lore")
+                raw["lore"] is List<*> -> (raw["lore"] as List<*>).mapNotNull { it as? String }
+                else -> emptyList()
+            }
+            val lore = loreStrings.map { amp.deserialize(it) }
+
+            var action = parseAction(raw["action"]) ?: continue
+
+            if (action is LobbyAction.Command && action.denyMessage == null) {
+                val denyStr = Messages.getString("$msgBase.deny_message")
+                if (!denyStr.isNullOrBlank()) {
+                    action = LobbyAction.Command(action.command, amp.deserialize(denyStr))
+                }
+            }
 
             val item = createItem(material, id, name, lore)
 

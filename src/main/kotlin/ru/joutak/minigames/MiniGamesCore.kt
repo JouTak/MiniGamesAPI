@@ -12,7 +12,9 @@ import ru.joutak.minigames.command.teamselect.TeamSelectCommand
 import ru.joutak.minigames.command.unready.UnreadyCommand
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.config.storage.YamlConfigStorage
+import ru.joutak.minigames.gui.TeamSelectionGui
 import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
 import ru.joutak.minigames.listener.LobbyItemsListener
 import ru.joutak.minigames.listener.PlayerJoinListener
@@ -66,6 +68,10 @@ object MiniGamesCore {
     /** MiniGamesAPI results config file: plugins/<HostPlugin>/minigamesapi/results.yml */
     val apiResultsFile: File
         get() = apiDataPath.resolve("results.yml").toFile()
+
+    /** MiniGamesAPI messages config file: plugins/<HostPlugin>/minigamesapi/messages.yml */
+    val apiMessagesFile: File
+        get() = apiDataPath.resolve("messages.yml").toFile()
 
     fun initialize(plugin: JavaPlugin) {
         if (initialized) {
@@ -153,15 +159,127 @@ object MiniGamesCore {
             saveClasspathResourceOrDefault("minigamesapi/config.yml", configPath)
         }
 
+        // v2 migration: unify mode naming, add display name, drop old spartakiad.minigame_name.
+        migrateApiConfigV2(configPath)
+
         plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
 
         val storage = YamlConfigStorage(configPath.toFile())
         configuration = Config(storage)
 
+        try {
+            ensureMessagesConfig(configPath)
+            Messages.load(apiMessagesFile)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to load MiniGamesAPI messages.yml: ${t.message}")
+            plugin.logger.severe(t.stackTraceToString())
+        }
+
         // Ensure lobby items config is in memory before players click.
         LobbyItemsManager.reloadFromConfig()
 
         plugin.logger.info("MiniGamesAPI config loaded successfully.")
+    }
+
+    private fun migrateApiConfigV2(configPath: Path) {
+        try {
+            val file = configPath.toFile()
+            if (!file.exists()) return
+            val yaml = YamlConfiguration.loadConfiguration(file)
+
+            val version = yaml.getInt("minigamesapi.config_version", 1)
+
+            // mode.name priority, fallback to legacy spartakiad.minigame_name
+            val legacySpartaName = yaml.getString("spartakiad.minigame_name")?.trim()?.takeIf { it.isNotEmpty() }
+            val modeName = yaml.getString("mode.name")?.trim()?.takeIf { it.isNotEmpty() }
+
+            if (modeName == null && legacySpartaName != null) {
+                yaml.set("mode.name", legacySpartaName)
+            }
+
+            // Always remove legacy key to avoid divergence.
+            if (yaml.contains("spartakiad.minigame_name")) {
+                yaml.set("spartakiad.minigame_name", null)
+            }
+
+            val finalModeName = (yaml.getString("mode.name") ?: "minigame").trim().ifEmpty { "minigame" }
+
+            if (!yaml.contains("mode.display_name")) {
+                yaml.set("mode.display_name", finalModeName.uppercase())
+            }
+
+            if (version < 2) {
+                yaml.set("minigamesapi.config_version", 2)
+            }
+
+            yaml.save(file)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to migrate MiniGamesAPI config to v2: ${t.message}")
+        }
+    }
+
+    private fun ensureMessagesConfig(configPath: Path) {
+        val messagesPath = apiDataPath.resolve("messages.yml")
+
+        if (!messagesPath.exists()) {
+            plugin.logger.info("MiniGamesAPI messages.yml not found at $messagesPath, creating default...")
+            saveClasspathResourceOrDefault("minigamesapi/messages.yml", messagesPath)
+
+            // Best-effort: import old message texts from config.yml if they existed there.
+            try {
+                val cfg = YamlConfiguration.loadConfiguration(configPath.toFile())
+                val msg = YamlConfiguration.loadConfiguration(messagesPath.toFile())
+
+                // Matchmaking announce messages
+                if (cfg.contains("matchmaking.start.announce.message") && !msg.contains("messages.matchmaking.start.announce.message")) {
+                    msg.set("messages.matchmaking.start.announce.message", cfg.getString("matchmaking.start.announce.message"))
+                }
+                if (cfg.contains("matchmaking.start.announce.cancelled_message") && !msg.contains("messages.matchmaking.start.announce.cancelled_message")) {
+                    msg.set(
+                        "messages.matchmaking.start.announce.cancelled_message",
+                        cfg.getString("matchmaking.start.announce.cancelled_message")
+                    )
+                }
+                if (cfg.contains("matchmaking.start.announce.ready_message") && !msg.contains("messages.matchmaking.start.announce.ready_message")) {
+                    msg.set("messages.matchmaking.start.announce.ready_message", cfg.getString("matchmaking.start.announce.ready_message"))
+                }
+
+                // Teamselect GUI title + team names
+                if (cfg.contains("teamselect.title") && !msg.contains("ui.teamselect.title")) {
+                    msg.set("ui.teamselect.title", cfg.getString("teamselect.title"))
+                }
+                for (i in 1..16) {
+                    val p = "teamselect.teams.$i.name"
+                    val np = "ui.teamselect.teams.$i.name"
+                    if (cfg.contains(p) && !msg.contains(np)) {
+                        msg.set(np, cfg.getString(p))
+                    }
+                }
+
+                // Lobby hotbar item names/lore/deny
+                val hotbar = cfg.getMapList("lobby.items.hotbar")
+                for (raw in hotbar) {
+                    val id = (raw["id"] as? String)?.trim()?.takeIf { it.isNotEmpty() } ?: continue
+                    val base = "ui.lobby.items.$id"
+
+                    if (!msg.contains("$base.name") && raw["name"] is String) {
+                        msg.set("$base.name", raw["name"])
+                    }
+                    if (!msg.contains("$base.lore") && raw["lore"] is List<*>) {
+                        msg.set("$base.lore", raw["lore"])
+                    }
+
+                    val action = raw["action"] as? Map<*, *> ?: continue
+                    val deny = action["deny_message"] as? String
+                    if (deny != null && !msg.contains("$base.deny_message")) {
+                        msg.set("$base.deny_message", deny)
+                    }
+                }
+
+                msg.save(messagesPath.toFile())
+            } catch (_: Throwable) {
+            }
+        }
     }
 
 
@@ -220,6 +338,7 @@ object MiniGamesCore {
         val content = when (resourcePath) {
             "minigamesapi/config.yml" -> DEFAULT_API_CONFIG
             "minigamesapi/results.yml" -> DEFAULT_RESULTS_CONFIG
+            "minigamesapi/messages.yml" -> DEFAULT_MESSAGES_CONFIG
             else -> ""
         }
 
@@ -272,7 +391,7 @@ object MiniGamesCore {
     }
 
     private fun initSpartakiadManager() {
-        val minigameName = configuration.get(ConfigKeys.SPARTAKIAD_MINIGAME_NAME)
+        val minigameName = configuration.get(ConfigKeys.MODE_NAME)
 
         val gamePath = apiDataPath.resolve(minigameName)
         gamePath.toFile().mkdirs()
@@ -326,6 +445,7 @@ object MiniGamesCore {
         Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, plugin)
 
         Bukkit.getPluginManager().registerEvents(LobbyItemsListener, plugin)
+        Bukkit.getPluginManager().registerEvents(TeamSelectionGui, plugin)
 
         Bukkit.getPluginManager().registerEvents(PlayerJoinListener, plugin)
         Bukkit.getPluginManager().registerEvents(PlayerQuitListener, plugin)
@@ -365,11 +485,14 @@ object MiniGamesCore {
 
     private const val DEFAULT_API_CONFIG: String = """
 minigamesapi:
-  config_version: 1
+  # Service marker to distinguish API config from mode configs.
+  config_version: 2
 
 mode:
-  # Logical mode name, used as mode_key for results DB and other cross-mode integrations.
+  # Short logical key used for DB (mode_key) and internal identifiers.
   name: "minigame"
+  # Human readable name used for prefixes / UI.
+  display_name: "MINIGAME"
 
 uuid:
   # Use LibreLogin UUID resolver via reflection (fallback to Bukkit UUID if LibreLogin is missing).
@@ -381,7 +504,6 @@ storage:
 
 spartakiad:
   enabled: false
-  minigame_name: "minigame"
   attempts: 5
   team_mode: false
 
@@ -395,9 +517,6 @@ matchmaking:
       enabled: true
       interval_seconds: 5
       last_seconds_always: 5
-      message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
-      cancelled_message: "&cСтарт отменён: недостаточно игроков или команд."
-      ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
 
 lobby:
   items:
@@ -407,51 +526,124 @@ lobby:
         enabled: true
         slot: 2
         material: EMERALD
-        name: "&aГотов"
-        lore:
-          - "&7Быстро встать в очередь"
         action:
           type: READY
       - id: team_select
         enabled: true
         slot: 4
         material: NETHER_STAR
-        name: "&bВыбор команды"
-        lore:
-          - "&7Открыть меню выбора команды"
         action:
           type: TEAM_SELECT
       - id: lobby_return
         enabled: true
         slot: 6
         material: COMPASS
-        name: "&eВ лобби"
-        lore:
-          - "&7Вернуться в лобби"
         action:
           type: COMMAND
           command: "lobby"
-          deny_message: "&cКоманда недоступна."
 
 teamselect:
-  title: "&8Выбор команды"
   teams:
-    "1": { name: "&cКоманда 1", material: RED_WOOL, color: RED }
-    "2": { name: "&eКоманда 2", material: YELLOW_WOOL, color: YELLOW }
-    "3": { name: "&aКоманда 3", material: GREEN_WOOL, color: GREEN }
-    "4": { name: "&9Команда 4", material: BLUE_WOOL, color: BLUE }
-    "5": { name: "&bКоманда 5", material: CYAN_WOOL, color: AQUA }
-    "6": { name: "&dКоманда 6", material: PURPLE_WOOL, color: LIGHT_PURPLE }
-    "7": { name: "&6Команда 7", material: ORANGE_WOOL, color: GOLD }
-    "8": { name: "&3Команда 8", material: LIGHT_BLUE_WOOL, color: DARK_AQUA }
-    "9": { name: "&fКоманда 9", material: WHITE_WOOL, color: WHITE }
-    "10": { name: "&0Команда 10", material: BLACK_WOOL, color: BLACK }
-    "11": { name: "&5Команда 11", material: MAGENTA_WOOL, color: DARK_PURPLE }
-    "12": { name: "&2Команда 12", material: LIME_WOOL, color: DARK_GREEN }
-    "13": { name: "&dКоманда 13", material: PINK_WOOL, color: LIGHT_PURPLE }
-    "14": { name: "&4Команда 14", material: BROWN_WOOL, color: DARK_RED }
-    "15": { name: "&7Команда 15", material: GRAY_WOOL, color: GRAY }
-    "16": { name: "&8Команда 16", material: LIGHT_GRAY_WOOL, color: DARK_GRAY }
+    "1": { material: RED_WOOL, color: RED }
+    "2": { material: YELLOW_WOOL, color: YELLOW }
+    "3": { material: GREEN_WOOL, color: GREEN }
+    "4": { material: BLUE_WOOL, color: BLUE }
+    "5": { material: CYAN_WOOL, color: AQUA }
+    "6": { material: PURPLE_WOOL, color: LIGHT_PURPLE }
+    "7": { material: ORANGE_WOOL, color: GOLD }
+    "8": { material: LIGHT_BLUE_WOOL, color: DARK_AQUA }
+    "9": { material: WHITE_WOOL, color: WHITE }
+    "10": { material: BLACK_WOOL, color: BLACK }
+    "11": { material: MAGENTA_WOOL, color: DARK_PURPLE }
+    "12": { material: LIME_WOOL, color: DARK_GREEN }
+    "13": { material: PINK_WOOL, color: LIGHT_PURPLE }
+    "14": { material: BROWN_WOOL, color: DARK_RED }
+    "15": { material: GRAY_WOOL, color: GRAY }
+    "16": { material: LIGHT_GRAY_WOOL, color: DARK_GRAY }
+"""
+
+    private const val DEFAULT_MESSAGES_CONFIG: String = """
+messages:
+  # Prefix for all API technical messages. Placeholders: {mode_display}
+  prefix: "&7[&b{mode_display}&7] "
+
+  common:
+    only_players: "&cЭта команда доступна только игрокам."
+
+  join:
+    help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
+
+  lobby:
+    command_unavailable: "&cКоманда недоступна."
+
+  ready:
+    in_game: "&cВы уже в игре."
+    already_in_queue: "&eВы уже в очереди."
+    no_free_arenas: "&cНет свободных арен."
+    no_free_slots: "&cНет свободных слотов."
+    failed: "&cНе удалось добавить вас в очередь."
+    added: "&aВы добавлены в очередь. Команда: &f{team}"
+
+  unready:
+    removed: "&aВы покинули очередь."
+    not_in_queue: "&eВы не в очереди."
+
+  teamselect:
+    in_game: "&cВы уже в игре."
+    no_free_arenas: "&cНет свободных арен."
+    choose_team: "&eВыберите команду."
+    match_already_started: "&cМатч уже начался."
+    team_full: "&cКоманда заполнена."
+    added: "&aВы выбрали команду &f{team}&a."
+
+  forcerun:
+    no_instances: "&cНет активных инстансов."
+    will_start: "&aИнстанс поставлен на старт."
+
+  matchmaking:
+    start:
+      announce:
+        # Placeholders: {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
+        message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
+        cancelled_message: "&cСтарт отменён: недостаточно игроков или команд."
+        ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
+
+ui:
+  teamselect:
+    title: "&8Выбор команды"
+    teams:
+      "1": { name: "&cКоманда 1" }
+      "2": { name: "&eКоманда 2" }
+      "3": { name: "&aКоманда 3" }
+      "4": { name: "&9Команда 4" }
+      "5": { name: "&bКоманда 5" }
+      "6": { name: "&dКоманда 6" }
+      "7": { name: "&6Команда 7" }
+      "8": { name: "&3Команда 8" }
+      "9": { name: "&fКоманда 9" }
+      "10": { name: "&0Команда 10" }
+      "11": { name: "&5Команда 11" }
+      "12": { name: "&2Команда 12" }
+      "13": { name: "&dКоманда 13" }
+      "14": { name: "&4Команда 14" }
+      "15": { name: "&7Команда 15" }
+      "16": { name: "&8Команда 16" }
+
+  lobby:
+    items:
+      quick_ready:
+        name: "&aГотов"
+        lore:
+          - "&7Быстро встать в очередь"
+      team_select:
+        name: "&bВыбор команды"
+        lore:
+          - "&7Открыть меню выбора команды"
+      lobby_return:
+        name: "&eВ лобби"
+        lore:
+          - "&7Вернуться в лобби"
+        deny_message: "&cКоманда недоступна."
 """
 
     private const val DEFAULT_RESULTS_CONFIG: String = """

@@ -9,6 +9,12 @@ object ConfigKeys {
      */
     val MODE_NAME = object : ConfigKey<String>("mode.name", "minigame") {}
 
+    /**
+     * Human-readable mode name for prefixes / UI.
+     * Example: "СПЛАТУН", "CREAKYWARS".
+     */
+    val MODE_DISPLAY_NAME = object : ConfigKey<String>("mode.display_name", "MINIGAME") {}
+
     val SPARTAKIAD_ENABLED = object : ConfigKey<Boolean>("spartakiad.enabled", false) {}
     val SPARTAKIAD_MINIGAME_NAME = object : ConfigKey<String>("spartakiad.minigame_name", "minigame".lowercase()) {}
     val SPARTAKIAD_ATTEMPTS = object : ConfigKey<Int>("spartakiad.attempts", 5) {}

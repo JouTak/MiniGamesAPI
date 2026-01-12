@@ -11,10 +11,12 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.inventory.InventoryClickEvent
+import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
 import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameQueue
 import org.bukkit.configuration.file.YamlConfiguration
@@ -40,7 +42,7 @@ object TeamSelectionGui : Listener {
     fun open(player: Player, instance: GameInstance, callback: (Player, Int) -> Unit) {
         val size = ((instance.teams.size - 1) / 9 + 1) * 9
         val yaml = YamlConfiguration.loadConfiguration(MiniGamesCore.apiConfigFile)
-        val title = yaml.getString("teamselect.title") ?: "&8Выбор команды"
+        val title = Messages.getString("ui.teamselect.title") ?: yaml.getString("teamselect.title") ?: "&8Выбор команды"
         val invTitle = org.bukkit.ChatColor.translateAlternateColorCodes('&', title)
         val inventory = Bukkit.createInventory(null, size, invTitle)
 
@@ -94,7 +96,7 @@ object TeamSelectionGui : Listener {
         val colorName = yaml.getString("$base.color")?.trim()?.uppercase()
         val color = parseNamedColor(colorName) ?: defaultTeamColor(teamNumber)
 
-        val nameStr = yaml.getString("$base.name")
+        val nameStr = Messages.getString("ui.teamselect.teams.$teamNumber.name") ?: yaml.getString("$base.name")
         val display = nameStr?.let { amp.deserialize(it) }
 
         return TeamStyle(material, color, display)
@@ -165,6 +167,20 @@ object TeamSelectionGui : Listener {
 
         data.callback(player, slot)
         player.closeInventory()
+    }
+
+    @EventHandler
+    fun onInventoryDrag(event: InventoryDragEvent) {
+        val player = event.whoClicked as? Player ?: return
+        val data = openInventories[player] ?: return
+
+        // Cancel only if drag touches the top inventory (GUI), otherwise let player drag in their inventory.
+        if (event.view.topInventory != data.inventory) return
+
+        val touchesTop = event.rawSlots.any { it < data.inventory.size }
+        if (touchesTop) {
+            event.isCancelled = true
+        }
     }
 
     @EventHandler
