@@ -14,6 +14,7 @@ import org.bukkit.persistence.PersistentDataType
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
+import ru.joutak.minigames.ui.QueueBossBarManager
 
 object LobbyItemsManager {
 
@@ -88,17 +89,22 @@ object LobbyItemsManager {
     fun ensure(player: Player) {
         if (!lobbyItemsEnabled) {
             remove(player)
+            QueueBossBarManager.ensure(player)
             return
         }
 
         if (MatchmakingManager.isPlayerInStartedGame(player.uniqueId)) {
             remove(player)
+            QueueBossBarManager.ensure(player)
             return
         }
 
         // Always keep lobby items consistent (also fixes "moved/changed" items).
         remove(player)
         apply(player)
+
+        // BossBar should be visible to everyone in lobby.
+        QueueBossBarManager.ensure(player)
     }
 
     fun apply(player: Player) {

@@ -5,6 +5,7 @@ import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameInstanceConfig
 import ru.joutak.minigames.domain.GameQueue
@@ -334,40 +335,46 @@ object MatchmakingManager {
 
         lastAnnouncedSeconds[instance] = remainingSeconds
 
-        val template = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_MESSAGE)
-        val msg = formatMessage(
-            template,
-            mapOf(
-                "seconds" to remainingSeconds.toString(),
-                "current" to info.waitingPlayers.toString(),
-                "max" to info.maxPlayers.toString(),
-                "required" to info.requiredPlayers.toString(),
-                "teams_current" to info.waitingTeams.toString(),
-                "teams_required" to info.requiredTeams.toString()
-            )
+        val placeholders = mapOf(
+            "seconds" to remainingSeconds.toString(),
+            "current" to info.waitingPlayers.toString(),
+            "max" to info.maxPlayers.toString(),
+            "required" to info.requiredPlayers.toString(),
+            "teams_current" to info.waitingTeams.toString(),
+            "teams_required" to info.requiredTeams.toString()
         )
 
-        broadcastToWaitingPlayers(instance, msg)
+        val fallback = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_MESSAGE)
+        val msg = buildPrefixedMessage(
+            path = "messages.matchmaking.start.announce.message",
+            fallbackTemplate = fallback,
+            placeholders = placeholders
+        )
+
+        broadcastToLobbyPlayers(msg)
     }
 
     private fun maybeAnnounceCancelled(instance: GameInstance) {
         val enabled = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_ENABLED)
         if (!enabled) return
 
-        val template = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_CANCELLED_MESSAGE)
         val info = getPartialStartInfo(instance)
-        val msg = formatMessage(
-            template,
-            mapOf(
-                "current" to info.waitingPlayers.toString(),
-                "max" to info.maxPlayers.toString(),
-                "required" to info.requiredPlayers.toString(),
-                "teams_current" to info.waitingTeams.toString(),
-                "teams_required" to info.requiredTeams.toString()
-            )
+        val placeholders = mapOf(
+            "current" to info.waitingPlayers.toString(),
+            "max" to info.maxPlayers.toString(),
+            "required" to info.requiredPlayers.toString(),
+            "teams_current" to info.waitingTeams.toString(),
+            "teams_required" to info.requiredTeams.toString()
         )
 
-        broadcastToWaitingPlayers(instance, msg)
+        val fallback = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_CANCELLED_MESSAGE)
+        val msg = buildPrefixedMessage(
+            path = "messages.matchmaking.start.announce.cancelled_message",
+            fallbackTemplate = fallback,
+            placeholders = placeholders
+        )
+
+        broadcastToLobbyPlayers(msg)
     }
 
     private fun maybeAnnounceReady(instance: GameInstance) {
@@ -380,30 +387,43 @@ object MatchmakingManager {
         val enabled = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_ENABLED)
         if (!enabled) return
 
-        val template = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_READY_MESSAGE)
-        val msg = formatMessage(
-            template,
-            mapOf(
-                "current" to info.waitingPlayers.toString(),
-                "max" to info.maxPlayers.toString(),
-                "required" to info.requiredPlayers.toString(),
-                "teams_current" to info.waitingTeams.toString(),
-                "teams_required" to info.requiredTeams.toString()
-            )
+        val placeholders = mapOf(
+            "current" to info.waitingPlayers.toString(),
+            "max" to info.maxPlayers.toString(),
+            "required" to info.requiredPlayers.toString(),
+            "teams_current" to info.waitingTeams.toString(),
+            "teams_required" to info.requiredTeams.toString()
         )
 
-        broadcastToWaitingPlayers(instance, msg)
+        val fallback = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ANNOUNCE_READY_MESSAGE)
+        val msg = buildPrefixedMessage(
+            path = "messages.matchmaking.start.announce.ready_message",
+            fallbackTemplate = fallback,
+            placeholders = placeholders
+        )
+
+        broadcastToLobbyPlayers(msg)
     }
 
-    private fun broadcastToWaitingPlayers(instance: GameInstance, message: String) {
-        // Only waiting players (pre-game). No global broadcast.
-        val unique = HashMap<UUID, Player>()
-        instance.teams.forEach { team ->
-            team.forEach { p ->
-                if (p.isOnline) unique[p.uniqueId] = p
+    private fun broadcastToLobbyPlayers(message: String) {
+        // Broadcast to everyone who is in lobby (i.e., not in started games).
+        Bukkit.getOnlinePlayers().forEach { p ->
+            if (!isPlayerInStartedGame(p.uniqueId)) {
+                p.sendMessage(message)
             }
         }
-        unique.values.forEach { it.sendMessage(message) }
+    }
+
+    private fun buildPrefixedMessage(path: String, fallbackTemplate: String, placeholders: Map<String, String>): String {
+        // Prefer messages.yml (supports prefix + placeholders).
+        if (Messages.has(path)) {
+            return Messages.prefixedLegacyString(path, placeholders)
+        }
+
+        // Backward compatibility: old configs stored templates in config.yml.
+        val body = formatMessage(fallbackTemplate, placeholders)
+        val prefix = Messages.legacyString("messages.prefix")
+        return prefix + body
     }
 
     private fun formatMessage(template: String, placeholders: Map<String, String>): String {

@@ -2,6 +2,12 @@ messages:
   # Prefix for all API technical messages. Placeholders: {mode_display}
   prefix: "&7[&b{mode_display}&7] "
 
+  bossbar:
+    queue:
+      # Placeholders: {current}, {max}, {free}, {total}
+      title: "&eНабор игроков: &6{current}&e/&6{max} &7(свободных арен: &f{free}&7/&f{total}&7)"
+      no_instances: "&cИнстансы не загружены"
+
   common:
     only_players: "&cЭта команда доступна только игрокам."
 

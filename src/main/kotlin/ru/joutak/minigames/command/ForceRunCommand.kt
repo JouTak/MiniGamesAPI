@@ -1,34 +1,31 @@
 package ru.joutak.minigames.command
 
-import com.mojang.brigadier.Command
-import com.mojang.brigadier.builder.LiteralArgumentBuilder
-import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
-import net.kyori.adventure.text.Component
-import ru.joutak.minigames.command.PluginCommand
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
 
-object ForceRunCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
+object ForceRunCommand {
 
-    override fun getBuilder(): LiteralArgumentBuilder<CommandSourceStack> {
-        return Commands.literal("forcerun")
-            .requires { it.sender.hasPermission("minigames.admin") }
-            .executes { ctx ->
+    fun getBuilder() = Commands.literal("forcerun")
+        .requires { src ->
+            val s = src.sender
+            s.isOp || s.hasPermission("minigamesapi.admin") || s.hasPermission("minigamesapi.forcerun")
+        }
+        .executes { ctx ->
+            val sender = ctx.source.sender
 
-                val instance = MatchmakingManager.getActiveInstances()
-                    .firstOrNull { !it.started && !it.isFull() && it.teams.sumOf { t -> t.size } > 0 }
+            val candidates = MatchmakingManager.getActiveInstances().filter { !it.started }
+            val target = candidates
+                .maxByOrNull { it.teams.sumOf { t -> t.size } }
+                ?.takeIf { it.teams.sumOf { t -> t.size } > 0 }
 
-                if (instance == null) {
-                    ctx.source.sender.sendMessage(Component.text("Нет активных инстансов, которые можно запустить!"))
-                    return@executes Command.SINGLE_SUCCESS
-                }
-
-                // Насильно отправляем инстанс в очередь ready
-                MatchmakingManager.forceReady(instance)
-
-                ctx.source.sender.sendMessage(Component.text("Игра будет запущена без ожидания остальных!"))
-
-                Command.SINGLE_SUCCESS
+            if (target == null) {
+                sender.sendMessage(Messages.prefixedLegacyString("messages.forcerun.no_instances"))
+                return@executes 1
             }
-    }
+
+            MatchmakingManager.forceReady(target)
+            sender.sendMessage(Messages.prefixedLegacyString("messages.forcerun.will_start"))
+            1
+        }
 }
