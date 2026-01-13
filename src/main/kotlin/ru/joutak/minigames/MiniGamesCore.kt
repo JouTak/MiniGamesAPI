@@ -31,6 +31,7 @@ import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
+import ru.joutak.minigames.ui.LobbyScoreboardManager
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -105,6 +106,10 @@ object MiniGamesCore {
                 }
             }, 1L)
         }
+
+        // Lobby sidebar scoreboard: show teams composition for the upcoming match.
+        LobbyScoreboardManager.start()
+        LobbyScoreboardManager.updateAll()
 
         MiniGamesAPI.initialize(plugin, configuration)
         plugin.logger.info("MiniGamesAPI встроена как библиотека")
@@ -204,7 +209,29 @@ object MiniGamesCore {
 
             val finalModeName = (yaml.getString("mode.name") ?: "minigame").trim().ifEmpty { "minigame" }
 
-            if (!yaml.contains("mode.display_name")) {
+            // Some configs may use different naming conventions for display name.
+            // Prefer "mode.display_name" but also accept legacy variants like "mode.display-name" and "mode.displayName".
+            val displayUnderscore = yaml.getString("mode.display_name")?.trim()?.takeIf { it.isNotEmpty() }
+            val displayDash = yaml.getString("mode.display-name")?.trim()?.takeIf { it.isNotEmpty() }
+            val displayCamel = yaml.getString("mode.displayName")?.trim()?.takeIf { it.isNotEmpty() }
+
+            if (displayUnderscore == null) {
+                val imported = displayDash ?: displayCamel
+                if (!imported.isNullOrBlank()) {
+                    yaml.set("mode.display_name", imported)
+                }
+            }
+
+            // Remove legacy keys to avoid divergence.
+            if (yaml.contains("mode.display-name")) {
+                yaml.set("mode.display-name", null)
+            }
+            if (yaml.contains("mode.displayName")) {
+                yaml.set("mode.displayName", null)
+            }
+
+            val finalDisplay = yaml.getString("mode.display_name")?.trim().orEmpty()
+            if (finalDisplay.isEmpty()) {
                 yaml.set("mode.display_name", finalModeName.uppercase())
             }
 
@@ -470,6 +497,10 @@ object MiniGamesCore {
     fun shutdown() {
         plugin.logger.info("MiniGamesCore.shutdown()")
 
+        LobbyScoreboardManager.stop()
+
+        LobbyScoreboardManager.stop()
+
         try {
             configuration.close()
         } catch (_: Throwable) {
@@ -508,10 +539,6 @@ spartakiad:
   team_mode: false
 
 matchmaking:
-  # Pool size multiplier: how many identical instances to keep available per configured arena.
-  # Example: if a mode loads 1 arena config for map "game" and this is 3, you can run up to 3 parallel matches.
-  instance_pool_size: 1
-
   start:
     enabled: false
     min_fill_percent: 1.0

@@ -71,6 +71,14 @@ ui:
       "16": { name: "&8Команда 16" }
 
   lobby:
+    scoreboard:
+      title: "&bITMOcraft &fminiGAMES"
+      lines:
+        mode: "&7Вы играете в режим: &e{mode_display}"
+        nick: "&7Ваш ник: &a{nick}"
+        ip: "&7IP: &6craft.itmo.ru"
+      empty: "&7Нет набора игроков"
+
     items:
       quick_ready:
         name: "&aГотов"

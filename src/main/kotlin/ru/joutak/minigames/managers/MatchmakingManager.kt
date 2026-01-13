@@ -12,6 +12,7 @@ import ru.joutak.minigames.domain.GameQueue
 import ru.joutak.minigames.event.GameInstanceReadyEvent
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.ui.QueueBossBarManager
+import ru.joutak.minigames.ui.LobbyScoreboardManager
 import java.util.ArrayDeque
 import java.util.UUID
 import kotlin.math.ceil
@@ -76,6 +77,7 @@ object MatchmakingManager {
         }
 
         QueueBossBarManager.updateAll()
+        LobbyScoreboardManager.updateAll()
     }
 
     fun getActiveInstances(): List<GameInstance> = activeInstances.toList()
@@ -138,6 +140,7 @@ object MatchmakingManager {
 
         if (removedFromInstance || removedFromQueue) {
             QueueBossBarManager.updateAll()
+            LobbyScoreboardManager.updateAll()
         }
 
         // If player left a running match, restore lobby items (after other plugins clean inventory).
@@ -162,6 +165,7 @@ object MatchmakingManager {
 
                 readyQueue.add(instance)
                 QueueBossBarManager.updateAll()
+                LobbyScoreboardManager.updateAll()
                 fireReadyEvent(instance)
             }
             clearDelayedState(instance)
@@ -169,6 +173,7 @@ object MatchmakingManager {
             // If instance is not eligible anymore, remove it from ready queue.
             if (readyQueue.remove(instance)) {
                 QueueBossBarManager.updateAll()
+                LobbyScoreboardManager.updateAll()
             }
         }
     }
@@ -192,6 +197,7 @@ object MatchmakingManager {
             }
 
         QueueBossBarManager.updateAll()
+        LobbyScoreboardManager.updateAll()
         return instance
     }
 
@@ -200,6 +206,7 @@ object MatchmakingManager {
         if (!readyQueue.contains(instance)) {
             readyQueue.add(instance)
             QueueBossBarManager.updateAll()
+            LobbyScoreboardManager.updateAll()
             fireReadyEvent(instance)
         }
     }
