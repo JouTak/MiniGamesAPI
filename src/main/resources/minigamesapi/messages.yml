@@ -1,95 +1,115 @@
 messages:
   # Prefix for all API technical messages. Placeholders: {mode_display}
-  prefix: "&7[&b{mode_display}&7] "
+  prefix: '&7[&b{mode_display}&7] '
 
   bossbar:
     queue:
       # Placeholders: {current}, {max}, {free}, {total}
-      title: "&eНабор игроков: &6{current}&e/&6{max} &7(свободных арен: &f{free}&7/&f{total}&7)"
-      no_instances: "&cИнстансы не загружены"
-
+      title: "&eНабор игроков: &6{current}&e/&6{max}"
+      no_instances: "&cИгры не проходят"
   common:
-    only_players: "&cЭта команда доступна только игрокам."
+    only_players: '&cЭта команда доступна только игрокам.'
 
   join:
-    help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
+    help: '&7Команды: &a/ready&7, &b/teamselect&7, &c/unready'
 
   lobby:
-    command_unavailable: "&cКоманда недоступна."
+    command_unavailable: '&cКоманда недоступна.'
 
   ready:
-    in_game: "&cВы уже в игре."
-    already_in_queue: "&eВы уже в очереди."
-    no_free_arenas: "&cНет свободных арен."
-    no_free_slots: "&cНет свободных слотов."
-    failed: "&cНе удалось добавить вас в очередь."
-    added: "&aВы добавлены в очередь. Команда: &f{team}"
+    in_game: '&cВы уже в игре.'
+    already_in_queue: '&eВы уже в очереди.'
+    no_free_arenas: '&cНет свободных арен.'
+    no_free_slots: '&cНет свободных слотов.'
+    failed: '&cНе удалось добавить вас в очередь.'
+    added: '&aВы добавлены в очередь. Команда: &f{team}'
 
   unready:
-    removed: "&aВы покинули очередь."
-    not_in_queue: "&eВы не в очереди."
+    removed: '&aВы покинули очередь.'
+    not_in_queue: '&eВы не в очереди.'
 
   teamselect:
-    in_game: "&cВы уже в игре."
-    no_free_arenas: "&cНет свободных арен."
-    choose_team: "&eВыберите команду."
-    match_already_started: "&cМатч уже начался."
-    team_full: "&cКоманда заполнена."
-    added: "&aВы выбрали команду &f{team}&a."
+    in_game: '&cВы уже в игре.'
+    no_free_arenas: '&cНет свободных арен.'
+    choose_team: '&eВыберите команду.'
+    match_already_started: '&cМатч уже начался.'
+    team_full: '&cКоманда заполнена.'
+    added: '&aВы выбрали команду &f{team}&a.'
 
   forcerun:
-    no_instances: "&cНет активных инстансов."
-    will_start: "&aИнстанс поставлен на старт."
+    no_instances: '&cНет активных инстансов.'
+    will_start: '&aИгра будет запущена принудительно администратором.'
 
   matchmaking:
     start:
       announce:
         # Placeholders: {seconds}, {current}, {max}, {required}, {teams_current}, {teams_required}
-        message: "&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e) — стартуем."
-        cancelled_message: "&cСтарт отменён: недостаточно игроков или команд."
-        ready_message: "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
+        message: '&eДо начала игры &6{seconds}&e сек. Если не наберётся полный матч
+          (&6{current}&e/&6{max}&e, команд &6{teams_current}&e/&6{teams_required}&e)
+          — стартуем.'
+        cancelled_message: '&cСтарт отменён: недостаточно игроков или команд.'
+        ready_message: '&aМатч стартует неполным составом (&f{current}&a/&f{max}&a,
+          команд &f{teams_current}&a/&f{teams_required}&a).'
 
 ui:
   teamselect:
-    title: "&8Выбор команды"
+    title: '&8Выбор команды'
     teams:
-      "1": { name: "&cКоманда 1" }
-      "2": { name: "&eКоманда 2" }
-      "3": { name: "&aКоманда 3" }
-      "4": { name: "&9Команда 4" }
-      "5": { name: "&bКоманда 5" }
-      "6": { name: "&dКоманда 6" }
-      "7": { name: "&6Команда 7" }
-      "8": { name: "&3Команда 8" }
-      "9": { name: "&fКоманда 9" }
-      "10": { name: "&0Команда 10" }
-      "11": { name: "&5Команда 11" }
-      "12": { name: "&2Команда 12" }
-      "13": { name: "&dКоманда 13" }
-      "14": { name: "&4Команда 14" }
-      "15": { name: "&7Команда 15" }
-      "16": { name: "&8Команда 16" }
+      '1':
+        name: '&cКоманда 1'
+      '2':
+        name: '&eКоманда 2'
+      '3':
+        name: '&aКоманда 3'
+      '4':
+        name: '&9Команда 4'
+      '5':
+        name: '&bКоманда 5'
+      '6':
+        name: '&dКоманда 6'
+      '7':
+        name: '&6Команда 7'
+      '8':
+        name: '&3Команда 8'
+      '9':
+        name: '&fКоманда 9'
+      '10':
+        name: '&0Команда 10'
+      '11':
+        name: '&5Команда 11'
+      '12':
+        name: '&2Команда 12'
+      '13':
+        name: '&dКоманда 13'
+      '14':
+        name: '&4Команда 14'
+      '15':
+        name: '&7Команда 15'
+      '16':
+        name: '&8Команда 16'
 
   lobby:
     scoreboard:
       title: "&bITMOcraft &fminiGAMES"
       lines:
-        mode: "&7Вы играете в режим: &e{mode_display}"
-        nick: "&7Ваш ник: &a{nick}"
-        ip: "&7IP: &6craft.itmo.ru"
+        server: "Привет!"
+        mode: "&7Ты играешь в режим: &e{mode_display}"
+        nick: "&7Твой ник: &a{nick}"
+        ip: "&7IP для друзей: &6craft.itmo.ru"
       empty: "&7Нет набора игроков"
-
     items:
       quick_ready:
-        name: "&aГотов"
+        name: '&aГотов'
         lore:
-          - "&7Быстро встать в очередь"
+          - '&7Быстро встать в очередь'
       team_select:
-        name: "&bВыбор команды"
+        name: '&bВыбор команды'
         lore:
-          - "&7Открыть меню выбора команды"
+          - '&7Открыть меню выбора команды'
       lobby_return:
-        name: "&eВ лобби"
+        name: '&eВ лобби'
         lore:
-          - "&7Вернуться в лобби"
-        deny_message: "&cКоманда недоступна."
+          - '&7Вернуться в лобби'
+        deny_message: '&cКоманда недоступна.'
+
+
