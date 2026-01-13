@@ -1,34 +1,33 @@
 package ru.joutak.minigames.command.unready
 
-import com.mojang.brigadier.Command
-import com.mojang.brigadier.builder.LiteralArgumentBuilder
-import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
-import net.kyori.adventure.text.Component
 import org.bukkit.entity.Player
-import ru.joutak.minigames.command.PluginCommand
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
 
-object UnreadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
+object UnreadyCommand {
 
-    override fun getBuilder(): LiteralArgumentBuilder<CommandSourceStack> {
-        return Commands.literal("unready")
-            .executes { ctx ->
-                val executor = ctx.source.executor as? Player ?: run {
-                    ctx.source.sender.sendMessage(
-                        Component.text("Только игроки могут использовать эту команду")
-                    )
-                    return@executes Command.SINGLE_SUCCESS
-                }
-
-                val removed = MatchmakingManager.removePlayer(executor)
-                if (removed) {
-                    executor.sendMessage(Component.text("Вы больше не в очереди."))
-                } else {
-                    executor.sendMessage(Component.text("Вы не были в очереди."))
-                }
-
-                Command.SINGLE_SUCCESS
+    fun getBuilder() = Commands.literal("unready")
+        .executes { ctx ->
+            val sender = ctx.source.sender
+            val player = sender as? Player
+            if (player == null) {
+                sender.sendMessage(Messages.prefixedLegacyString("messages.common.only_players"))
+                return@executes 1
             }
-    }
+
+            if (MatchmakingManager.isPlayerInStartedGame(player.uniqueId)) {
+                // /unready is a lobby command: it must not affect running matches.
+                player.sendMessage(Messages.prefixedLegacyString("messages.lobby.command_unavailable"))
+                return@executes 1
+            }
+
+            val removed = MatchmakingManager.removePlayer(player)
+            if (removed) {
+                player.sendMessage(Messages.prefixedLegacyString("messages.unready.removed"))
+            } else {
+                player.sendMessage(Messages.prefixedLegacyString("messages.unready.not_in_queue"))
+            }
+            1
+        }
 }
