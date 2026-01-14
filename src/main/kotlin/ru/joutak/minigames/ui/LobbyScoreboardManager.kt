@@ -37,11 +37,8 @@ object LobbyScoreboardManager {
     private var cachedApiYaml: YamlConfiguration? = null
     private var cachedApiYamlMtime: Long = -1L
 
-    // 15 lines max; keep a few extra.
-    private val uniqueTails: List<String> = listOf(
-        "\u200B", "\u200C", "\u200D", "\u2060", "\u2061", "\u2062", "\u2063", "\u2064",
-        "\u206A", "\u206B", "\u206C", "\u206D", "\u206E", "\u206F", "\uFEFF", "\u180E"
-    )
+    // 15 lines max; use invisible legacy color codes as unique tails.
+    private val uniqueTails: List<String> = ChatColor.values().filter { it.isColor }.map { it.toString() }
 
     fun start() {
         if (taskId != null) return
@@ -215,10 +212,10 @@ object LobbyScoreboardManager {
     private fun colorize(text: String): String = ChatColor.translateAlternateColorCodes('&', text)
 
     private fun uniqueEntry(colored: String, idx: Int): String {
-        // Do NOT use color codes for uniqueness: they may leak into the score number on the right.
-        // Zero-width chars keep entries unique without visual artifacts.
+        // Use legacy color codes as invisible unique tails.
+        // This avoids box-glyph artifacts for unsupported zero-width Unicode.
         val tail = uniqueTails[idx % uniqueTails.size]
-        return colored + tail
+        return colored + ChatColor.RESET + tail
     }
 
     private fun getApiYaml(): YamlConfiguration {
