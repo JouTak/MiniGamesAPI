@@ -24,6 +24,12 @@ object MatchmakingManager {
     private val readyQueue = ArrayDeque<GameInstance>()
 
     /**
+     * Instances explicitly forced to start by admin command.
+     * Such instances should stay in the ready queue even if normal readiness rules would remove them.
+     */
+    private val forcedReadyInstances = mutableSetOf<GameInstance>()
+
+    /**
      * When "start with threshold" is enabled and delay > 0, we keep a per-instance timestamp
      * for the moment it became eligible. If the instance stays eligible for
      * [ConfigKeys.MATCHMAKING_START_DELAY_SECONDS], it will become ready.
@@ -62,6 +68,7 @@ object MatchmakingManager {
 
         activeInstances.clear()
         readyQueue.clear()
+        forcedReadyInstances.clear()
 
         val globalPoolSize = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_INSTANCE_POOL_SIZE)
             .coerceAtLeast(1)
@@ -119,6 +126,7 @@ object MatchmakingManager {
 
                 // If it's a started instance, it's not eligible for ready queue.
                 readyQueue.remove(instance)
+                forcedReadyInstances.remove(instance)
 
                 // Don't break: player might also still be present in waiting teams in buggy situations.
             }
@@ -158,6 +166,30 @@ object MatchmakingManager {
     fun checkReady(instance: GameInstance) {
         if (instance.started) return
 
+        // Forced instances should remain in the ready queue regardless of normal readiness rules.
+        if (forcedReadyInstances.contains(instance)) {
+            val waitingPlayers = instance.teams.sumOf { it.size }
+            if (waitingPlayers <= 0) {
+                // Do not keep empty forced instances around.
+                forcedReadyInstances.remove(instance)
+                if (readyQueue.remove(instance)) {
+                    QueueBossBarManager.updateAll()
+                    LobbyScoreboardManager.updateAll()
+                }
+                clearDelayedState(instance)
+                return
+            }
+
+            if (!readyQueue.contains(instance)) {
+                readyQueue.add(instance)
+                QueueBossBarManager.updateAll()
+                LobbyScoreboardManager.updateAll()
+                fireReadyEvent(instance)
+            }
+            clearDelayedState(instance)
+            return
+        }
+
         if (shouldBeReady(instance)) {
             if (!readyQueue.contains(instance)) {
                 // Announce "not full but will start" loudly in chat (like CreakyWars), if applicable.
@@ -185,6 +217,8 @@ object MatchmakingManager {
     fun pollReady(): GameInstance? {
         val instance = readyQueue.poll() ?: return null
 
+        forcedReadyInstances.remove(instance)
+
         clearDelayedState(instance)
 
         val activeIds = instance.startMatchAndSnapshotPlayers()
@@ -203,6 +237,8 @@ object MatchmakingManager {
 
     fun forceReady(instance: GameInstance) {
         if (instance.started) return
+        forcedReadyInstances.add(instance)
+        clearDelayedState(instance)
         if (!readyQueue.contains(instance)) {
             readyQueue.add(instance)
             QueueBossBarManager.updateAll()
