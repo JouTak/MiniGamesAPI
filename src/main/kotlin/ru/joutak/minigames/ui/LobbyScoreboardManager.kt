@@ -6,6 +6,7 @@ import org.bukkit.entity.Player
 import org.bukkit.scoreboard.DisplaySlot
 import org.bukkit.scoreboard.Objective
 import org.bukkit.scoreboard.Scoreboard
+import org.bukkit.configuration.file.YamlConfiguration
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
@@ -32,6 +33,15 @@ object LobbyScoreboardManager {
 
     private val states = mutableMapOf<UUID, BoardState>()
     private var taskId: Int? = null
+
+    private var cachedApiYaml: YamlConfiguration? = null
+    private var cachedApiYamlMtime: Long = -1L
+
+    // 15 lines max; keep a few extra.
+    private val uniqueTails: List<String> = listOf(
+        "\u200B", "\u200C", "\u200D", "\u2060", "\u2061", "\u2062", "\u2063", "\u2064",
+        "\u206A", "\u206B", "\u206C", "\u206D", "\u206E", "\u206F", "\uFEFF", "\u180E"
+    )
 
     fun start() {
         if (taskId != null) return
@@ -118,6 +128,7 @@ object LobbyScoreboardManager {
 
     private fun buildLines(player: Player): List<String> {
         val modeDisplay = MiniGamesCore.configuration.get(ConfigKeys.MODE_DISPLAY_NAME)
+        val yaml = getApiYaml()
         val placeholders = mapOf(
             "mode_display" to modeDisplay,
             "nick" to player.name
@@ -160,8 +171,7 @@ object LobbyScoreboardManager {
         val maxPerTeam = instance.config.playersPerTeam
         instance.teams.forEachIndexed { index, team ->
             val teamNumber = index + 1
-            val teamName = Messages.getString("ui.teamselect.teams.$teamNumber.name")
-                ?: "&fКоманда $teamNumber"
+            val teamName = resolveTeamName(yaml, teamNumber)
 
             lines += "$teamName &7(${team.size}/$maxPerTeam)"
 
@@ -205,9 +215,79 @@ object LobbyScoreboardManager {
     private fun colorize(text: String): String = ChatColor.translateAlternateColorCodes('&', text)
 
     private fun uniqueEntry(colored: String, idx: Int): String {
-        val codes = ChatColor.values()
-        val tail = codes[(idx + 1) % codes.size].toString()
+        // Do NOT use color codes for uniqueness: they may leak into the score number on the right.
+        // Zero-width chars keep entries unique without visual artifacts.
+        val tail = uniqueTails[idx % uniqueTails.size]
         return colored + tail
+    }
+
+    private fun getApiYaml(): YamlConfiguration {
+        val file = MiniGamesCore.apiConfigFile
+        val mtime = file.lastModified()
+        val current = cachedApiYaml
+        return if (current == null || mtime != cachedApiYamlMtime) {
+            val loaded = YamlConfiguration.loadConfiguration(file)
+            cachedApiYaml = loaded
+            cachedApiYamlMtime = mtime
+            loaded
+        } else {
+            current
+        }
+    }
+
+    private fun resolveTeamName(yaml: YamlConfiguration, teamNumber: Int): String {
+        val rawName = Messages.getString("ui.teamselect.teams.$teamNumber.name")
+            ?: yaml.getString("teamselect.teams.$teamNumber.name")
+            ?: "&fКоманда $teamNumber"
+
+        val cfgColor = parseTeamColor(yaml.getString("teamselect.teams.$teamNumber.color"))
+            ?: return rawName
+
+        // Override leading color with the one from config (keep formatting like bold).
+        val translated = ChatColor.translateAlternateColorCodes('&', rawName)
+        return applyLeadingColor(translated, cfgColor)
+    }
+
+    private fun parseTeamColor(raw: String?): ChatColor? {
+        val v = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+
+        // Accept legacy codes like "&c" or "§c".
+        if (v.length >= 2 && (v[0] == '&' || v[0] == ChatColor.COLOR_CHAR)) {
+            val c = v[1]
+            return ChatColor.getByChar(c)
+        }
+
+        return runCatching { ChatColor.valueOf(v.uppercase()) }.getOrNull()
+    }
+
+    private fun applyLeadingColor(text: String, color: ChatColor): String {
+        var i = 0
+        val formats = StringBuilder()
+
+        while (i + 1 < text.length && text[i] == ChatColor.COLOR_CHAR) {
+            val code = text[i + 1].lowercaseChar()
+            when (code) {
+                in '0'..'9', in 'a'..'f' -> {
+                    // drop previous colors
+                }
+
+                'k', 'l', 'm', 'n', 'o' -> {
+                    formats.append(ChatColor.COLOR_CHAR).append(code)
+                }
+
+                'r' -> {
+                    // drop reset
+                }
+
+                else -> {
+                    // unknown code: keep it
+                    formats.append(ChatColor.COLOR_CHAR).append(code)
+                }
+            }
+            i += 2
+        }
+
+        return color.toString() + formats + text.substring(i)
     }
 
     /**
