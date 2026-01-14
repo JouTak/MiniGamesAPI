@@ -2,6 +2,7 @@ package ru.joutak.minigames.listener
 
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerJoinEvent
@@ -11,10 +12,11 @@ object PlayerJoinListener : Listener {
 
     @EventHandler
     fun onJoin(event: PlayerJoinEvent) {
-        val player = event.player
-        player.scheduler.runDelayed(
+        val uuid = event.player.uniqueId
+        Bukkit.getScheduler().runTaskLater(
             MiniGamesCore.plugin,
-            { _ ->
+            Runnable {
+                val player = Bukkit.getPlayer(uuid) ?: return@Runnable
                 player.sendMessage(
                     Component.text("Основные команды:\n", NamedTextColor.YELLOW)
                         .append(
@@ -33,7 +35,6 @@ object PlayerJoinListener : Listener {
                         .append(Component.text("/lobby - вернуться в лобби миниигр", NamedTextColor.YELLOW))
                 )
             },
-            null,
             20L
         )
     }
