@@ -12,9 +12,20 @@ messages:
 
   join:
     help: '&7Команды: &a/ready&7, &b/teamselect&7, &c/unready'
+    help_tournament: '&7Турнир: команды назначаются организаторами. Команды: &c/unready&7, &e/lobby'
 
   lobby:
     command_unavailable: '&cКоманда недоступна.'
+
+  tournament:
+    # Сообщения для режима турнира (tournament.enabled=true).
+    not_participant: '&cВы не участник турнира.'
+    no_attempts: '&cУ вашей команды закончились попытки на этот этап.'
+    winner: '&cВаша команда уже прошла этот этап.'
+    not_qualified: '&cВаша команда не прошла предыдущий этап.'
+    disabled_teamselect: '&cВ турнире команды назначаются организаторами.'
+    disabled_ready: '&cВ турнире готовность команды задаёт капитан.'
+    error: '&cОшибка проверки доступа. Обратитесь к администратору.'
 
   ready:
     in_game: '&cВы уже в игре.'

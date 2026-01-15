@@ -20,6 +20,57 @@ object ConfigKeys {
     val SPARTAKIAD_ATTEMPTS = object : ConfigKey<Int>("spartakiad.attempts", 5) {}
     val SPARTAKIAD_TEAM_MODE = object : ConfigKey<Boolean>("spartakiad.team_mode", false) {}
 
+    /**
+     * Tournament mode (new name for legacy "spartakiad" mode).
+     * When enabled, access/queue/team selection is controlled by TournamentManager.
+     */
+    val TOURNAMENT_ENABLED = object : ConfigKey<Boolean>("tournament.enabled", false) {}
+
+    /**
+     * Tournament id (shared across all modes/stages).
+     * Example: "spartakiad_2026".
+     */
+    val TOURNAMENT_EVENT_ID = object : ConfigKey<String>("tournament.event_id", "spartakiad") {}
+
+    /**
+     * Current tournament stage on this server.
+     * Example: "round1", "round2", "round3".
+     */
+    val TOURNAMENT_STAGE = object : ConfigKey<String>("tournament.stage", "round1") {}
+
+    /**
+     * If set, only teams who WON the previous stage can participate in the current stage.
+     * Example: current "round2" requires previous "round1".
+     */
+    val TOURNAMENT_PREVIOUS_STAGE = object : ConfigKey<String>("tournament.previous_stage", "") {}
+
+    /**
+     * Default attempts for a team per stage (created on first access if absent in DB).
+     */
+    val TOURNAMENT_DEFAULT_ATTEMPTS = object : ConfigKey<Int>("tournament.default_attempts", 1) {
+        override fun validate(value: Int) {
+            require(value >= 0) { "tournament.default_attempts must be >= 0" }
+        }
+    }
+
+    /**
+     * Permission for admin bypass in tournament mode.
+     * IMPORTANT: PreLoginEvent does not have permissions, so uuid list is also supported.
+     */
+    val TOURNAMENT_BYPASS_PERMISSION = object : ConfigKey<String>("tournament.bypass.permission", "minigamesapi.tournament.bypass") {}
+
+    /**
+     * Additional bypass list for AsyncPlayerPreLoginEvent (no permissions there).
+     * Values are UUID strings.
+     */
+    val TOURNAMENT_BYPASS_UUIDS = object : ConfigKey<List<String>>("tournament.bypass.uuids", emptyList()) {}
+
+    /**
+     * If true, tournament gate is applied on pre-login strictly.
+     * If false, gate may be applied later on join (useful when name->uuid binding is needed).
+     */
+    val TOURNAMENT_PRELOGIN_STRICT = object : ConfigKey<Boolean>("tournament.prelogin.strict", true) {}
+
     val USE_LIBRE_LOGIN = object : ConfigKey<Boolean>("uuid.use_libre_login", true) {}
 
     val STORAGE_DEBOUNCE_MILLIS = object : ConfigKey<Long>("storage.debounce_millis", 500) {}

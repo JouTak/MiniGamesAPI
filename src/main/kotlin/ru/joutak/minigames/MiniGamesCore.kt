@@ -32,6 +32,7 @@ import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
 import ru.joutak.minigames.ui.LobbyScoreboardManager
+import ru.joutak.minigames.tournament.TournamentManager
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -92,6 +93,8 @@ object MiniGamesCore {
 
         // Results are global for all modes; always initialize (it will be disabled by config by default).
         initResultsManager()
+
+        initTournamentManager()
 
         loadDependencies()
         initSpartakiadManager()
@@ -390,6 +393,20 @@ object MiniGamesCore {
         }
     }
 
+    private fun initTournamentManager() {
+        try {
+            TournamentManager.initialize(
+                plugin = plugin,
+                configuration = configuration,
+                resultsFile = apiResultsFile,
+            )
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to initialize TournamentManager: ${t.message}")
+            plugin.logger.severe(t.stackTraceToString())
+        }
+    }
+
+
     private fun loadDependencies() {
         val useLL = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
         plugin.logger.info("LibreLogin enabled in config: $useLL")
@@ -511,6 +528,11 @@ object MiniGamesCore {
         LobbyScoreboardManager.stop()
 
         try {
+            TournamentManager.shutdown()
+        } catch (_: Throwable) {
+        }
+
+        try {
             configuration.close()
         } catch (_: Throwable) {
         }
@@ -612,9 +634,19 @@ messages:
 
   join:
     help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
+    help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &c/unready&7, &e/lobby"
 
   lobby:
     command_unavailable: "&cКоманда недоступна."
+
+  tournament:
+    not_participant: "&cВы не участник турнира."
+    no_attempts: "&cУ вашей команды закончились попытки на этот этап."
+    winner: "&cВаша команда уже прошла этот этап."
+    not_qualified: "&cВаша команда не прошла предыдущий этап."
+    disabled_teamselect: "&cВ турнире команды назначаются организаторами."
+    disabled_ready: "&cВ турнире готовность команды задаёт капитан."
+    error: "&cОшибка проверки доступа. Обратитесь к администратору."
 
   ready:
     in_game: "&cВы уже в игре."
@@ -683,8 +715,7 @@ ui:
         name: "&eВ лобби"
         lore:
           - "&7Вернуться в лобби"
-        deny_message: "&cКоманда недоступна."
-"""
+        deny_message: "&cКоманда недоступна.""""
 
     private const val DEFAULT_RESULTS_CONFIG: String = """
 results:

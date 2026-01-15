@@ -6,6 +6,9 @@ import io.papermc.paper.command.brigadier.CommandSourceStack
 import io.papermc.paper.command.brigadier.Commands
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
+import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.config.ConfigKeys
+import ru.joutak.minigames.MiniGamesCore
 import org.bukkit.entity.Player
 import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.domain.GameQueue
@@ -32,6 +35,12 @@ object TeamSelectCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
      */
     fun openTeamSelect(player: Player) {
         val uuid = player.uniqueId
+
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            player.sendMessage(Messages.prefixedComponent("messages.tournament.disabled_teamselect"))
+            return
+        }
+
 
         if (MatchmakingManager.isPlayerInStartedGame(uuid)) {
             player.sendMessage(Component.text("Сейчас вы в игре. Нельзя выбирать команду.", NamedTextColor.RED))

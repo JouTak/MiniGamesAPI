@@ -27,6 +27,38 @@ spartakiad:
   # team_mode=true: whitelist.yml трактуется как команды (teamlist), иначе как список ников
   team_mode: false
 
+tournament:
+  # Новый режим турнира (замена легаси "spartakiad").
+  # Включение этого режима постепенно будет вытеснять spartakiad.*.
+  enabled: false
+
+  # Идентификатор турнира (общий для всех режимов/стадий).
+  # Пример: "spartakiad_2026"
+  event_id: "spartakiad"
+
+  # Текущая стадия на этом сервере.
+  # Примеры: "round1", "round2", "round3".
+  stage: "round1"
+
+  # Если задано, вход в текущую стадию разрешён только командам,
+  # которые победили в предыдущей стадии.
+  previous_stage: ""
+
+  # Попытки на команду по умолчанию (если прогресс отсутствует в БД).
+  default_attempts: 1
+
+  # Применять турнирный гейт строго в AsyncPlayerPreLoginEvent.
+  # Если false, часть проверок может выполняться на join (когда доступна связь nickname->uuid).
+  prelogin:
+    strict: true
+
+  bypass:
+    # Пермишен для bypass внутри сервера (join/checks). На prelogin его нет.
+    permission: "minigamesapi.tournament.bypass"
+
+    # UUID-list для bypass на prelogin (без прав/пермишенов).
+    uuids: []
+
 matchmaking:
   # Сколько одинаковых инстансов держать доступными на одну настройку арены.
   # Если у режима в конфиге один "map: game", а здесь 3 — можно запустить до 3 параллельных матчей на этой карте.
