@@ -3,6 +3,7 @@ package ru.joutak.minigames.event
 import org.bukkit.event.Event
 import org.bukkit.event.HandlerList
 
+@Deprecated("Legacy participants events; not used by current Spartakiad flow (SQLite ParticipantStorage).")
 class ParticipantsListChangeEvent : Event() {
     companion object {
         @JvmStatic

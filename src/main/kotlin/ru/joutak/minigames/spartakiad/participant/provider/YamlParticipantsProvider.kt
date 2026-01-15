@@ -7,6 +7,9 @@ import java.io.File
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicReference
 
+@Deprecated(
+    message = "Legacy YAML participants provider; not used by current Spartakiad flow (SQLite ParticipantStorage)."
+)
 class YamlParticipantsProvider(
     private val participantsFile: File,
 ) : ParticipantsProvider {

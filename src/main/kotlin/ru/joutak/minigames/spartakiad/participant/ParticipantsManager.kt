@@ -7,6 +7,10 @@ import ru.joutak.minigames.spartakiad.participant.provider.ParticipantsProvider
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArraySet
 
+@Deprecated(
+    message = "Legacy participants list manager; not used by current Spartakiad flow (SQLite ParticipantStorage).",
+    replaceWith = ReplaceWith("ParticipantManager")
+)
 class ParticipantsManager(
     private val participantsProvider: ParticipantsProvider,
 ) : AutoCloseable {
@@ -27,8 +31,8 @@ class ParticipantsManager(
             throw IllegalArgumentException("Игрок с именем $preparedName уже есть в списке!")
         }
 
-        participants.add(name)
-        participantsProvider.add(name)
+        participants.add(preparedName)
+        participantsProvider.add(preparedName)
     }
 
     fun remove(name: String) {
@@ -46,10 +50,9 @@ class ParticipantsManager(
                 clear()
 
                 names.forEach { name ->
-                    try {
-                        add(name)
-                    } catch (e: IllegalArgumentException) {
-                        MiniGamesCore.plugin.logger.warning("Не удалось добавить участника $name: ${e.message}")
+                    val preparedName = name.trim()
+                    if (preparedName.isNotBlank()) {
+                        participants.add(preparedName)
                     }
                 }
 

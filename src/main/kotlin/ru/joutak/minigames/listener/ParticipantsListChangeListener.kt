@@ -5,6 +5,7 @@ import org.bukkit.event.Listener
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.event.ParticipantsListChangeEvent
 
+@Deprecated("Legacy participants listeners; not registered by MiniGamesCore.")
 object ParticipantsListChangeListener : Listener {
     @EventHandler
     fun onParticipantsListChange(event: ParticipantsListChangeEvent) {

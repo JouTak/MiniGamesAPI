@@ -17,6 +17,9 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 import kotlin.io.path.name
 
+@Deprecated(
+    message = "Legacy YAML participants watcher; not used by current Spartakiad flow (SQLite ParticipantStorage)."
+)
 class ParticipantsFileWatcher(
     private val participantsFile: File,
     private val participantsProvider: ParticipantsProvider,

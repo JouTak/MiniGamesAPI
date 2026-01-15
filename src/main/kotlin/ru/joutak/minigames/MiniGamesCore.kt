@@ -411,9 +411,24 @@ object MiniGamesCore {
         } catch (_: ClassNotFoundException) {
             plugin.logger.severe("LibreLogin not found! Disabling LibreLogin integration.")
             libreLogin = null
-        } catch (e: Exception) {
-            plugin.logger.severe("Failed to load LibreLogin dynamically: $e")
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to load LibreLogin dynamically: ${t.message}")
+            plugin.logger.fine(t.stackTraceToString())
             libreLogin = null
+        }
+    }
+
+    private fun tryCreateLibreLoginUuidResolver(libreLoginInstance: Any): UuidResolver? {
+        return try {
+            val libreLoginPluginClass = Class.forName("xyz.kyngs.librelogin.api.LibreLoginPlugin")
+            val ctor = LibreLoginUuidResolver::class.java.getConstructor(libreLoginPluginClass)
+            ctor.newInstance(libreLoginInstance) as UuidResolver
+        } catch (t: Throwable) {
+            plugin.logger.warning(
+                "Failed to create LibreLoginUuidResolver, falling back to Bukkit UUIDs: ${t.javaClass.simpleName}: ${t.message}"
+            )
+            plugin.logger.fine(t.stackTraceToString())
+            null
         }
     }
 
@@ -444,12 +459,8 @@ object MiniGamesCore {
 
         val uuidResolver: UuidResolver =
             if (usingLibreLogin && libreLogin != null) {
-                try {
-                    val ctor = LibreLoginUuidResolver::class.java.getConstructor(Any::class.java)
-                    ctor.newInstance(libreLogin) as UuidResolver
-                } catch (_: Exception) {
-                    BukkitUuidResolver()
-                }
+                tryCreateLibreLoginUuidResolver(libreLogin!!)
+                    ?: BukkitUuidResolver()
             } else {
                 BukkitUuidResolver()
             }
@@ -496,8 +507,6 @@ object MiniGamesCore {
 
     fun shutdown() {
         plugin.logger.info("MiniGamesCore.shutdown()")
-
-        LobbyScoreboardManager.stop()
 
         LobbyScoreboardManager.stop()
 
