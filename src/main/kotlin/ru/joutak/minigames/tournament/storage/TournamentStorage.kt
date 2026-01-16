@@ -1,6 +1,7 @@
 package ru.joutak.minigames.tournament.storage
 
 import ru.joutak.minigames.tournament.model.TournamentTeamProgress
+import ru.joutak.minigames.tournament.model.TournamentTeamCaptain
 import java.util.UUID
 
 /**
@@ -17,6 +18,8 @@ interface TournamentStorage {
      * Implementations may bind UUID to a name-based roster on first successful lookup.
      */
     fun findTeamKey(eventId: String, playerUuid: UUID, playerName: String): String?
+
+    fun getTeamCaptain(eventId: String, teamKey: String): TournamentTeamCaptain?
 
     fun getProgress(eventId: String, stage: String, teamKey: String): TournamentTeamProgress?
 

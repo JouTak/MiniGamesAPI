@@ -1,6 +1,7 @@
 package ru.joutak.minigames.tournament.storage
 
 import ru.joutak.minigames.tournament.model.TournamentTeamProgress
+import ru.joutak.minigames.tournament.model.TournamentTeamCaptain
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
@@ -127,6 +128,35 @@ class JdbcTournamentStorage(
                     }
 
                     return teamKey
+                }
+            }
+        }
+    }
+
+    override fun getTeamCaptain(eventId: String, teamKey: String): TournamentTeamCaptain? {
+        openConnection().use { conn ->
+            conn.prepareStatement(
+                "SELECT captain_uuid, captain_name FROM tournament_team WHERE event_id=? AND team_key=? LIMIT 1"
+            ).use { ps ->
+                ps.setString(1, eventId)
+                ps.setString(2, teamKey)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    val uuidStr = rs.getString(1)?.trim().orEmpty()
+                    val name = rs.getString(2)?.trim().orEmpty().ifBlank { null }
+
+                    val uuid = if (uuidStr.isNotBlank()) {
+                        try {
+                            UUID.fromString(uuidStr)
+                        } catch (_: Throwable) {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+
+                    if (uuid == null && name == null) return null
+                    return TournamentTeamCaptain(uuid = uuid, name = name)
                 }
             }
         }
