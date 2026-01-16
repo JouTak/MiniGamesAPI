@@ -1,6 +1,7 @@
 package ru.joutak.minigames.tournament
 
 import net.kyori.adventure.text.Component
+import org.bukkit.Bukkit
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
@@ -8,12 +9,28 @@ import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
 import ru.joutak.minigames.tournament.model.TournamentGateResult
+import ru.joutak.minigames.tournament.model.TournamentTeamCaptain
 import ru.joutak.minigames.tournament.storage.JdbcTournamentStorage
 import ru.joutak.minigames.tournament.storage.TournamentStorage
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 object TournamentManager {
+
+    enum class ForceReadyDenyReason {
+        NOT_PARTICIPANT,
+        ONLY_CAPTAIN,
+        ERROR,
+    }
+
+    data class ForceReadyToggleResult(
+        val allowed: Boolean,
+        val enabled: Boolean = false,
+        val changed: Boolean = false,
+        val teamKey: String? = null,
+        val reason: ForceReadyDenyReason? = null,
+    )
 
     @Volatile
     private var enabled: Boolean = false
@@ -25,6 +42,8 @@ object TournamentManager {
     private lateinit var configuration: Config
 
     private var storage: TournamentStorage? = null
+
+    private val forceReadyTeams: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     @Volatile
     private var bypassUuids: Set<UUID> = emptySet()
@@ -42,8 +61,11 @@ object TournamentManager {
             initOk = false
             storage = null
             bypassUuids = emptySet()
+            forceReadyTeams.clear()
             return
         }
+
+        forceReadyTeams.clear()
 
         bypassUuids = parseBypassUuids(configuration.get(ConfigKeys.TOURNAMENT_BYPASS_UUIDS))
 
@@ -101,11 +123,131 @@ object TournamentManager {
         enabled = false
         initOk = false
         bypassUuids = emptySet()
+        forceReadyTeams.clear()
         try {
             storage?.close()
         } catch (_: Throwable) {
         }
         storage = null
+    }
+
+    /**
+     * Toggles "force ready" flag for the player's team.
+     * Used to allow starting with incomplete roster; separated from /ready for safety.
+     */
+    fun toggleForceReady(playerUuid: UUID, playerName: String): ForceReadyToggleResult {
+        if (!enabled) return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+
+        val s = storage
+        if (!initOk || s == null) {
+            return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+        }
+
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        if (eventId.isBlank()) {
+            return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+        }
+
+        return try {
+            val teamKey = s.findTeamKey(eventId, playerUuid, playerName)
+                ?: return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.NOT_PARTICIPANT)
+
+            if (!canManageForceReady(s, eventId, teamKey, playerUuid, playerName)) {
+                return ForceReadyToggleResult(false, teamKey = teamKey, reason = ForceReadyDenyReason.ONLY_CAPTAIN)
+            }
+
+            val key = "$eventId|$teamKey"
+            val nowEnabled = if (forceReadyTeams.contains(key)) {
+                forceReadyTeams.remove(key)
+                false
+            } else {
+                forceReadyTeams.add(key)
+                true
+            }
+
+            ForceReadyToggleResult(
+                allowed = true,
+                enabled = nowEnabled,
+                changed = true,
+                teamKey = teamKey,
+            )
+        } catch (t: Throwable) {
+            plugin.logger.severe("Tournament forceready failed for $playerName/$playerUuid: ${t.message}")
+            plugin.logger.fine(t.stackTraceToString())
+            ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+        }
+    }
+
+    /** Clears "force ready" for player's team (used by /unready in tournament mode). */
+    fun clearForceReady(playerUuid: UUID, playerName: String): ForceReadyToggleResult {
+        if (!enabled) return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+
+        val s = storage
+        if (!initOk || s == null) {
+            return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+        }
+
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        if (eventId.isBlank()) {
+            return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+        }
+
+        return try {
+            val teamKey = s.findTeamKey(eventId, playerUuid, playerName)
+                ?: return ForceReadyToggleResult(false, reason = ForceReadyDenyReason.NOT_PARTICIPANT)
+
+            if (!canManageForceReady(s, eventId, teamKey, playerUuid, playerName)) {
+                return ForceReadyToggleResult(false, teamKey = teamKey, reason = ForceReadyDenyReason.ONLY_CAPTAIN)
+            }
+
+            val key = "$eventId|$teamKey"
+            val changed = forceReadyTeams.remove(key)
+
+            ForceReadyToggleResult(
+                allowed = true,
+                enabled = false,
+                changed = changed,
+                teamKey = teamKey,
+            )
+        } catch (t: Throwable) {
+            plugin.logger.severe("Tournament clear forceready failed for $playerName/$playerUuid: ${t.message}")
+            plugin.logger.fine(t.stackTraceToString())
+            ForceReadyToggleResult(false, reason = ForceReadyDenyReason.ERROR)
+        }
+    }
+
+    fun isTeamForceReady(teamKey: String): Boolean {
+        if (!enabled) return false
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        if (eventId.isBlank()) return false
+        return forceReadyTeams.contains("$eventId|$teamKey")
+    }
+
+    private fun canManageForceReady(
+        storage: TournamentStorage,
+        eventId: String,
+        teamKey: String,
+        actorUuid: UUID,
+        actorName: String,
+    ): Boolean {
+        val cap = try {
+            storage.getTeamCaptain(eventId, teamKey)
+        } catch (_: Throwable) {
+            null
+        } ?: return true
+
+        // If captain is online, only captain can toggle. If captain is offline (or not set), any team member may.
+        if (cap.uuid != null) {
+            val online = Bukkit.getPlayer(cap.uuid)?.isOnline == true
+            if (online) return cap.uuid == actorUuid
+        }
+
+        if (cap.name != null) {
+            val online = Bukkit.getPlayerExact(cap.name)?.isOnline == true
+            if (online) return cap.name.equals(actorName, ignoreCase = true)
+        }
+
+        return true
     }
 
     fun isEnabled(): Boolean = enabled

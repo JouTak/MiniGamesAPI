@@ -5,6 +5,7 @@ import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.ForceRunCommand
+import ru.joutak.minigames.command.forceready.ForceReadyCommand
 import ru.joutak.minigames.command.mg.MiniGamesCommand
 import ru.joutak.minigames.command.mg.StartCommand
 import ru.joutak.minigames.command.ready.ReadyCommand
@@ -512,6 +513,7 @@ object MiniGamesCore {
         val unreadyCmd = UnreadyCommand.getBuilder().build()
         val mgCmd = MiniGamesCommand.getBuilder().then(StartCommand.getBuilder()).build()
         val forceRunCmd = ForceRunCommand.getBuilder().build()
+        val forceReadyCmd = ForceReadyCommand.getBuilder().build()
 
         plugin.lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(readyCmd)
@@ -519,6 +521,7 @@ object MiniGamesCore {
             event.registrar().register(unreadyCmd)
             event.registrar().register(mgCmd)
             event.registrar().register(forceRunCmd)
+            event.registrar().register(forceReadyCmd)
         }
     }
 
@@ -634,7 +637,7 @@ messages:
 
   join:
     help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
-    help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &c/unready&7, &e/lobby"
+    help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby"
 
   lobby:
     command_unavailable: "&cКоманда недоступна."
@@ -645,7 +648,14 @@ messages:
     winner: "&cВаша команда уже прошла этот этап."
     not_qualified: "&cВаша команда не прошла предыдущий этап."
     disabled_teamselect: "&cВ турнире команды назначаются организаторами."
-    disabled_ready: "&cВ турнире готовность команды задаёт капитан."
+    # /ready should NOT change anything in tournament mode. Use /forceready to confirm incomplete roster.
+    ready_confirm: "&eВы уверены?! &7Если хотите стартовать неполным составом, используйте &a/forceready&7."
+    forceready_only_in_tournament: "&cКоманда доступна только в режиме турнира."
+    only_captain: "&cГотовность неполным составом может подтвердить только капитан (если он онлайн)."
+    force_ready_on: "&aОк! Команда помечена как готовая к старту неполным составом."
+    force_ready_off: "&eОк! Метка готовности неполным составом снята."
+    force_ready_cleared: "&eМетка готовности неполным составом снята."
+    force_ready_already_cleared: "&7Метка готовности неполным составом уже снята."
     error: "&cОшибка проверки доступа. Обратитесь к администратору."
 
   ready:

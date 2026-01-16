@@ -39,7 +39,8 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
         val uuid = player.uniqueId
 
         if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
-            player.sendMessage(Messages.prefixedComponent("messages.tournament.disabled_ready"))
+            // Safety: in tournament mode, incomplete readiness must be confirmed via /forceready.
+            player.sendMessage(Messages.prefixedComponent("messages.tournament.ready_confirm"))
             return false
         }
 
