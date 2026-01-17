@@ -9,6 +9,7 @@ import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.tournament.TournamentManager
 
 /**
@@ -44,6 +45,9 @@ object ForceReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
 
                 val msg = if (result.enabled) "messages.tournament.force_ready_on" else "messages.tournament.force_ready_off"
                 player.sendMessage(Messages.prefixedComponent(msg))
+
+                // Force-ready affects tournament matchmaking distribution.
+                MatchmakingManager.rebuildTournamentWaitingAssignments()
 
                 Command.SINGLE_SUCCESS
             }

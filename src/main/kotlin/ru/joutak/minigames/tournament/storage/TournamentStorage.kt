@@ -25,5 +25,17 @@ interface TournamentStorage {
 
     fun getOrCreateProgress(eventId: String, stage: String, teamKey: String, defaultAttempts: Int): TournamentTeamProgress
 
+    /**
+     * Decrease attempts for the given team in a stage.
+     *
+     * Returns updated progress (best effort). Implementations must clamp attempts_left to 0.
+     */
+    fun decrementAttempts(eventId: String, stage: String, teamKey: String, delta: Int = 1): TournamentTeamProgress?
+
+    /**
+     * Marks the team progress as won/lost for a stage.
+     */
+    fun setWon(eventId: String, stage: String, teamKey: String, won: Boolean)
+
     fun close() {}
 }

@@ -44,26 +44,43 @@ object PlayerJoinListener : Listener {
                 val bypass = player.hasPermission(bypassPerm) || TournamentManager.isBypassUuid(player.uniqueId)
 
                 if (!bypass) {
-                    val teamKey = TournamentManager.consumePreLoginTeamKey(player.uniqueId)
-                        ?: TournamentManager.resolveTeamKey(player.uniqueId, player.name)
+                    val strict = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_PRELOGIN_STRICT)
+                    var markedOnlineByFinalize = false
+                    val teamKey = if (strict) {
+                        // Strict mode: pre-login should have reserved a slot already.
+                        TournamentManager.finalizeJoinFromPending(player.uniqueId)?.also {
+                            markedOnlineByFinalize = true
+                        } ?: (TournamentManager.consumePreLoginTeamKey(player.uniqueId)
+                            ?: TournamentManager.resolveTeamKey(player.uniqueId, player.name))
+                    } else {
+                        TournamentManager.consumePreLoginTeamKey(player.uniqueId)
+                            ?: TournamentManager.resolveTeamKey(player.uniqueId, player.name)
+                    }
 
                     if (teamKey == null || teamKey.isBlank()) {
                         // Should not happen for participants, but don't crash.
                         return@Runnable
                     }
 
-                    val maxOnline = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM)
-                    val current = TournamentManager.getOnlineCount(teamKey)
-                    if (current >= maxOnline) {
-                        player.kick(Messages.prefixedComponent("messages.tournament.team_full_online", mapOf("max" to maxOnline.toString())))
-                        TournamentManager.clearPreLoginCache(player.uniqueId)
-                        return@Runnable
-                    }
+                    // In strict mode, finalizeJoinFromPending(...) already called markOnline when it succeeded.
+                    if (!markedOnlineByFinalize) {
+                        val maxOnline = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM)
+                        val current = TournamentManager.getOnlineCount(teamKey)
+                        if (current >= maxOnline) {
+                            player.kick(Messages.prefixedComponent("messages.tournament.team_full_online", mapOf("max" to maxOnline.toString())))
+                            TournamentManager.clearPreLoginCache(player.uniqueId)
+                            TournamentManager.releasePending(player.uniqueId)
+                            return@Runnable
+                        }
 
-                    TournamentManager.markOnline(player.uniqueId, teamKey)
+                        TournamentManager.markOnline(player.uniqueId, teamKey)
+                    }
 
                     // Auto matchmaking for tournament: assign teams to instances.
                     MatchmakingManager.rebuildTournamentWaitingAssignments()
+                } else {
+                    // If bypass is permission-based, pre-login might have reserved a slot.
+                    TournamentManager.releasePending(player.uniqueId)
                 }
             }
             // Help message

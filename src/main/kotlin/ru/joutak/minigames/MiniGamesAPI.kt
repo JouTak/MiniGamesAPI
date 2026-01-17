@@ -5,6 +5,7 @@ import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
+import ru.joutak.minigames.tournament.TournamentManager
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
@@ -30,6 +31,8 @@ object MiniGamesAPI {
     fun isResultsEnabled(): Boolean = ResultsManager.isEnabled()
 
     fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
+        // Tournament progress must update even if results storage is disabled.
+        TournamentManager.applyMatchResult(result)
         return ResultsManager.recordMatch(result)
     }
 

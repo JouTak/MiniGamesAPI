@@ -213,4 +213,50 @@ class JdbcTournamentStorage(
         return getProgress(eventId, stage, teamKey)
             ?: TournamentTeamProgress(eventId, stage, teamKey, defaultAttempts, false)
     }
+
+    override fun decrementAttempts(eventId: String, stage: String, teamKey: String, delta: Int): TournamentTeamProgress? {
+        if (delta <= 0) return getProgress(eventId, stage, teamKey)
+
+        val now = System.currentTimeMillis()
+        openConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE tournament_team_progress
+                SET attempts_left = CASE WHEN attempts_left - ? < 0 THEN 0 ELSE attempts_left - ? END,
+                    updated_at_ms = ?
+                WHERE event_id = ? AND stage = ? AND team_key = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, delta)
+                ps.setInt(2, delta)
+                ps.setLong(3, now)
+                ps.setString(4, eventId)
+                ps.setString(5, stage)
+                ps.setString(6, teamKey)
+                ps.executeUpdate()
+            }
+        }
+
+        return getProgress(eventId, stage, teamKey)
+    }
+
+    override fun setWon(eventId: String, stage: String, teamKey: String, won: Boolean) {
+        val now = System.currentTimeMillis()
+        openConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE tournament_team_progress
+                SET won = ?, updated_at_ms = ?
+                WHERE event_id = ? AND stage = ? AND team_key = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setBoolean(1, won)
+                ps.setLong(2, now)
+                ps.setString(3, eventId)
+                ps.setString(4, stage)
+                ps.setString(5, teamKey)
+                ps.executeUpdate()
+            }
+        }
+    }
 }

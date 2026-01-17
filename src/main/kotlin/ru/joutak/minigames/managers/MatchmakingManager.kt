@@ -200,7 +200,10 @@ object MatchmakingManager {
         if (shouldBeReady(instance)) {
             if (!readyQueue.contains(instance)) {
                 // Announce "not full but will start" loudly in chat (like CreakyWars), if applicable.
-                maybeAnnounceReady(instance)
+                // Tournament has its own readiness logic and does not use the generic partial-start announcer.
+                if (!MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+                    maybeAnnounceReady(instance)
+                }
 
                 readyQueue.add(instance)
                 QueueBossBarManager.updateAll()
@@ -251,7 +254,8 @@ object MatchmakingManager {
     /**
      * Tournament mode: rebuild waiting assignments by tournament team_key.
      *
-     * Stage 2-3: only 4x4x4x4 (no partial rosters).
+     * Priority: picks the most filled eligible teams first.
+     * A team becomes eligible for a partial roster only after its captain confirms readiness via /forceready.
      */
     fun rebuildTournamentWaitingAssignments() {
         if (!MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) return
@@ -259,15 +263,48 @@ object MatchmakingManager {
         val waitingInstances = activeInstances.filter { !it.started }
         if (waitingInstances.isEmpty()) return
 
+        // Do not reshuffle instances that are already in ready queue (they are about to be started).
+        val lockedInstances = HashSet<GameInstance>()
+        lockedInstances.addAll(readyQueue)
+        lockedInstances.addAll(forcedReadyInstances)
+
+        val rebuildInstances = waitingInstances.filter { !lockedInstances.contains(it) }
+
+        val lockedPlayerIds = lockedInstances
+            .flatMap { it.teams.flatten() }
+            .map { it.uniqueId }
+            .toHashSet()
+
+        val lockedTeamKeys = lockedInstances
+            .flatMap { it.tournamentTeamKeys }
+            .filterNotNull()
+            .toHashSet()
+
+        if (rebuildInstances.isEmpty()) {
+            // Still re-check locked instances to react to /forceready toggles.
+            lockedInstances.forEach { checkReady(it) }
+            QueueBossBarManager.updateAll()
+            LobbyScoreboardManager.updateAll()
+            return
+        }
+
+        data class TeamEntry(
+            val key: String,
+            val members: List<Player>,
+            val size: Int,
+            val forceReady: Boolean,
+        )
+
         // Group online lobby players by tournament team key, excluding running matches.
         val lobbyPlayers = Bukkit.getOnlinePlayers()
-            .filter { it.isOnline && !isPlayerInStartedGame(it.uniqueId) }
+            .filter { it.isOnline && !isPlayerInStartedGame(it.uniqueId) && !lockedPlayerIds.contains(it.uniqueId) }
 
         val byTeam = linkedMapOf<String, MutableList<Player>>()
         for (p in lobbyPlayers) {
             if (TournamentManager.isBypassUuid(p.uniqueId) || p.hasPermission("minigames.tournament.bypass")) continue
 
             val teamKey = TournamentManager.getCachedTeamKey(p.uniqueId) ?: continue
+            if (lockedTeamKeys.contains(teamKey)) continue
             byTeam.getOrPut(teamKey) { mutableListOf() }.add(p)
 
             // Tournament does not use the old ready queue / selection queue.
@@ -278,31 +315,62 @@ object MatchmakingManager {
             list.sortBy { it.name.lowercase() }
         }
 
-        val sortedTeams = byTeam.entries
-            .sortedWith(compareByDescending<Map.Entry<String, MutableList<Player>>> { it.value.size }
-                .thenBy { it.key })
-
-        // Reset all waiting instances and distribute teams from scratch.
-        waitingInstances.forEach { it.resetTournamentLobbyState() }
-
-        var teamPtr = 0
-        for (inst in waitingInstances) {
-            for (teamIndex in 0 until inst.config.teamCount) {
-                if (teamPtr >= sortedTeams.size) break
-
-                val entry = sortedTeams[teamPtr++]
-                val teamKey = entry.key
-                val members = entry.value
-
-                val picked = members.take(inst.config.playersPerTeam)
-                if (picked.isEmpty()) continue
-
-                inst.setTournamentTeamKey(teamIndex, teamKey)
-                inst.teams[teamIndex].addAll(picked)
+        val allTeams = byTeam.entries
+            .map { e ->
+                val members = e.value
+                members.sortBy { it.name.lowercase() }
+                TeamEntry(
+                    key = e.key,
+                    members = members.toList(),
+                    size = members.size,
+                    forceReady = TournamentManager.isTeamForceReady(e.key),
+                )
             }
+            .sortedWith(compareByDescending<TeamEntry> { it.size }.thenBy { it.key })
 
-            checkReady(inst)
+        // Reset only instances we are allowed to rebuild.
+        rebuildInstances.forEach { it.resetTournamentLobbyState() }
+
+        val primaryCfg = rebuildInstances.first().config
+        val teamCount = primaryCfg.teamCount
+        val playersPerTeam = primaryCfg.playersPerTeam
+
+        val eligibleTeams = allTeams.filter { it.size >= playersPerTeam || (it.forceReady && it.size > 0) }
+        val matchableInstances = rebuildInstances.filter { it.config.teamCount == teamCount && it.config.playersPerTeam == playersPerTeam }
+        val possibleMatches = min(matchableInstances.size, eligibleTeams.size / teamCount)
+
+        val usedKeys = HashSet<String>()
+
+        // 1) Fill instances that should become ready immediately.
+        var ptr = 0
+        for (i in 0 until possibleMatches) {
+            val inst = matchableInstances[i]
+            for (teamIndex in 0 until inst.config.teamCount) {
+                val t = eligibleTeams[ptr++]
+                usedKeys.add(t.key)
+                inst.setTournamentTeamKey(teamIndex, t.key)
+                inst.teams[teamIndex].addAll(t.members.take(inst.config.playersPerTeam))
+            }
         }
+
+        // 2) Fill the rest (for waiting UI) with remaining teams by size.
+        val remainingTeams = allTeams.filter { !usedKeys.contains(it.key) }
+        var remPtr = 0
+        for (inst in rebuildInstances) {
+            if (inst.tournamentTeamKeys.any { it != null }) continue // already filled as a match
+
+            for (teamIndex in 0 until inst.config.teamCount) {
+                if (remPtr >= remainingTeams.size) break
+                val t = remainingTeams[remPtr++]
+                if (t.members.isEmpty()) continue
+
+                inst.setTournamentTeamKey(teamIndex, t.key)
+                inst.teams[teamIndex].addAll(t.members.take(inst.config.playersPerTeam))
+            }
+        }
+
+        // Re-check readiness for ALL waiting instances (locked are not reshuffled, but may change ready state).
+        waitingInstances.forEach { checkReady(it) }
 
         QueueBossBarManager.updateAll()
         LobbyScoreboardManager.updateAll()
@@ -349,7 +417,7 @@ object MatchmakingManager {
     private fun shouldBeReady(instance: GameInstance): Boolean {
         if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
             clearDelayedState(instance)
-            return instance.isFull()
+            return isTournamentReady(instance)
         }
 
         // Full instance always starts as before.
@@ -394,6 +462,27 @@ object MatchmakingManager {
         // Ensure periodic countdown + re-check.
         ensureCountdownTask(instance)
         return false
+    }
+
+    private fun isTournamentReady(instance: GameInstance): Boolean {
+        if (instance.started) return false
+        if (instance.teams.isEmpty()) return false
+
+        // Tournament instance is ready when ALL team slots are ready:
+        // - team is full, OR
+        // - team is marked /forceready and has at least 1 online member.
+        val requiredTeams = instance.config.teamCount
+        val playersPerTeam = instance.config.playersPerTeam
+
+        for (teamIndex in 0 until requiredTeams) {
+            val teamKey = instance.getTournamentTeamKey(teamIndex) ?: return false
+            val size = instance.teams.getOrNull(teamIndex)?.size ?: 0
+            if (size >= playersPerTeam) continue
+            if (size <= 0) return false
+            if (!TournamentManager.isTeamForceReady(teamKey)) return false
+        }
+
+        return true
     }
 
     private fun ensureCountdownTask(instance: GameInstance) {

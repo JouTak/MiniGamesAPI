@@ -39,6 +39,8 @@ object UnreadyCommand {
 
                 val msg = if (res.changed) "messages.tournament.force_ready_cleared" else "messages.tournament.force_ready_already_cleared"
                 player.sendMessage(Messages.prefixedComponent(msg))
+
+                MatchmakingManager.rebuildTournamentWaitingAssignments()
                 return@executes 1
             }
 

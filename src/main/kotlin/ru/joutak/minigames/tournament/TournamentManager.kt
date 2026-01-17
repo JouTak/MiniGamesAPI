@@ -6,6 +6,7 @@ import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
 import ru.joutak.minigames.tournament.model.TournamentGateResult
@@ -15,6 +16,11 @@ import ru.joutak.minigames.tournament.storage.TournamentStorage
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+
+private const val TEAM_CAP_RESERVATION_TTL_MS: Long = 60_000L
 
 object TournamentManager {
 
@@ -48,6 +54,23 @@ object TournamentManager {
     // Stores team_key resolved during pre-login (AsyncPlayerPreLoginEvent) to avoid a second DB query on join.
     private val preLoginTeamKeyCache = ConcurrentHashMap<UUID, String>()
 
+    private data class PendingSlot(
+        val teamKey: String,
+        val reservedAtMs: Long,
+    )
+
+    /**
+     * Pre-login slot reservations (strict mode). Protects against races when multiple members of the same team join.
+     */
+    private val pendingSlotsByPlayer = ConcurrentHashMap<UUID, PendingSlot>()
+    private val pendingCountByTeamKey = ConcurrentHashMap<String, Int>()
+    private val teamCapLock = Any()
+
+    @Volatile
+    private var executor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "tournament-updater").apply { isDaemon = true }
+    }
+
     // Online participants (non-bypass) mapped to their tournament team_key.
     private val onlineTeamKeyByPlayer = ConcurrentHashMap<UUID, String>()
 
@@ -65,6 +88,12 @@ object TournamentManager {
         this.plugin = plugin
         this.configuration = configuration
 
+        if (executor.isShutdown || executor.isTerminated) {
+            executor = Executors.newSingleThreadExecutor { r ->
+                Thread(r, "tournament-updater").apply { isDaemon = true }
+            }
+        }
+
         enabled = configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
         if (!enabled) {
             initOk = false
@@ -74,6 +103,8 @@ object TournamentManager {
             preLoginTeamKeyCache.clear()
             onlineTeamKeyByPlayer.clear()
             onlineCountByTeamKey.clear()
+            pendingSlotsByPlayer.clear()
+            pendingCountByTeamKey.clear()
             return
         }
 
@@ -81,6 +112,8 @@ object TournamentManager {
         preLoginTeamKeyCache.clear()
         onlineTeamKeyByPlayer.clear()
         onlineCountByTeamKey.clear()
+        pendingSlotsByPlayer.clear()
+        pendingCountByTeamKey.clear()
 
         bypassUuids = parseBypassUuids(configuration.get(ConfigKeys.TOURNAMENT_BYPASS_UUIDS))
 
@@ -142,11 +175,97 @@ object TournamentManager {
         preLoginTeamKeyCache.clear()
         onlineTeamKeyByPlayer.clear()
         onlineCountByTeamKey.clear()
+        pendingSlotsByPlayer.clear()
+        pendingCountByTeamKey.clear()
         try {
             storage?.close()
         } catch (_: Throwable) {
         }
         storage = null
+
+        executor.shutdown()
+        try {
+            executor.awaitTermination(1, TimeUnit.SECONDS)
+        } catch (_: Throwable) {
+        }
+    }
+
+    /**
+     * Applies match outcome to the tournament progress: decrements attempts for all participating teams
+     * and marks winner team as won.
+     *
+     * This method is async-safe and does not touch Bukkit API.
+     */
+    fun applyMatchResult(result: MatchResult): CompletableFuture<Boolean> {
+        if (!enabled) return CompletableFuture.completedFuture(false)
+        if (!initOk) return CompletableFuture.completedFuture(false)
+        val s = storage ?: return CompletableFuture.completedFuture(false)
+
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        val stage = configuration.get(ConfigKeys.TOURNAMENT_STAGE).trim()
+        if (eventId.isBlank() || stage.isBlank()) return CompletableFuture.completedFuture(false)
+
+        val defaultAttempts = configuration.get(ConfigKeys.TOURNAMENT_DEFAULT_ATTEMPTS)
+
+        return CompletableFuture.supplyAsync({
+            try {
+                val teamKeyByTeamId = HashMap<Int, String>()
+
+                // Map teamId -> teamKey using any player in that team.
+                for (p in result.players) {
+                    val teamId = p.teamId ?: continue
+                    if (teamKeyByTeamId.containsKey(teamId)) continue
+
+                    val cached = onlineTeamKeyByPlayer[p.playerUuid]
+                    if (!cached.isNullOrBlank()) {
+                        teamKeyByTeamId[teamId] = cached
+                        continue
+                    }
+
+                    val name = p.playerName?.trim().orEmpty()
+                    if (name.isNotBlank()) {
+                        val resolved = try {
+                            s.findTeamKey(eventId, p.playerUuid, name)
+                        } catch (_: Throwable) {
+                            null
+                        }
+                        if (!resolved.isNullOrBlank()) {
+                            teamKeyByTeamId[teamId] = resolved
+                        }
+                    }
+                }
+
+                if (teamKeyByTeamId.isEmpty()) return@supplyAsync false
+
+                // Decrement attempts for all participating teams.
+                val participating = teamKeyByTeamId.values.toSet()
+                for (teamKey in participating) {
+                    s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts)
+                    s.decrementAttempts(eventId, stage, teamKey, 1)
+
+                    // forceReady should not be sticky between matches
+                    forceReadyTeams.remove("$eventId|$teamKey")
+                }
+
+                // Determine winner teamId from teams list first.
+                val winnerTeamId = result.teams.firstOrNull { it.isWinner || it.placement == 1 }?.teamId
+                    ?: result.players.firstOrNull { it.isWinner }?.teamId
+
+                if (winnerTeamId != null) {
+                    val winnerKey = teamKeyByTeamId[winnerTeamId]
+                    if (!winnerKey.isNullOrBlank()) {
+                        s.getOrCreateProgress(eventId, stage, winnerKey, defaultAttempts)
+                        s.setWon(eventId, stage, winnerKey, true)
+                    }
+                }
+
+                true
+            } catch (t: Throwable) {
+                plugin.logger.severe("Failed to apply tournament match result: ${t.message}")
+                plugin.logger.fine(t.stackTraceToString())
+                false
+            }
+        }, executor)
     }
 
     /**
@@ -163,6 +282,87 @@ object TournamentManager {
      * Consumes (and removes) cached team_key from pre-login stage.
      */
     fun consumePreLoginTeamKey(uuid: UUID): String? = preLoginTeamKeyCache.remove(uuid)
+
+    /**
+     * Strict-mode prelogin reservation: try to reserve a slot for the given team.
+     * Must be callable from async thread.
+     */
+    fun tryReserveTeamSlot(uuid: UUID, teamKey: String): Boolean {
+        if (!enabled) return false
+        if (teamKey.isBlank()) return false
+
+        val now = System.currentTimeMillis()
+        synchronized(teamCapLock) {
+            cleanupExpiredPendingUnsafe(now)
+
+            // Already reserved.
+            val existing = pendingSlotsByPlayer[uuid]
+            if (existing != null) return existing.teamKey == teamKey
+
+            val maxOnline = configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM).coerceAtLeast(1)
+            val online = onlineCountByTeamKey[teamKey] ?: 0
+            val pending = pendingCountByTeamKey[teamKey] ?: 0
+            if (online + pending >= maxOnline) return false
+
+            pendingSlotsByPlayer[uuid] = PendingSlot(teamKey, now)
+            pendingCountByTeamKey[teamKey] = pending + 1
+            return true
+        }
+    }
+
+    /**
+     * Converts a reserved strict-mode slot into an online slot on PlayerJoin.
+     * Returns the teamKey if there was a reservation.
+     */
+    fun finalizeJoinFromPending(uuid: UUID): String? {
+        if (!enabled) return null
+
+        val slot = synchronized(teamCapLock) {
+            cleanupExpiredPendingUnsafe(System.currentTimeMillis())
+
+            val s = pendingSlotsByPlayer.remove(uuid) ?: return@synchronized null
+            pendingCountByTeamKey.compute(s.teamKey) { _, v ->
+                val next = (v ?: 0) - 1
+                if (next <= 0) null else next
+            }
+            s
+        } ?: return null
+
+        // Prevent stale cache growth.
+        preLoginTeamKeyCache.remove(uuid)
+
+        markOnline(uuid, slot.teamKey)
+        return slot.teamKey
+    }
+
+    /**
+     * Releases pending strict-mode reservation (bypass or login failure cleanup).
+     */
+    fun releasePending(uuid: UUID) {
+        if (!enabled) return
+        synchronized(teamCapLock) {
+            cleanupExpiredPendingUnsafe(System.currentTimeMillis())
+            releasePendingUnsafe(uuid)
+        }
+        preLoginTeamKeyCache.remove(uuid)
+    }
+
+    private fun releasePendingUnsafe(uuid: UUID) {
+        val slot = pendingSlotsByPlayer.remove(uuid) ?: return
+        pendingCountByTeamKey.compute(slot.teamKey) { _, v ->
+            val next = (v ?: 0) - 1
+            if (next <= 0) null else next
+        }
+    }
+
+    private fun cleanupExpiredPendingUnsafe(now: Long) {
+        val toRemove = pendingSlotsByPlayer.entries
+            .filter { now - it.value.reservedAtMs > TEAM_CAP_RESERVATION_TTL_MS }
+            .map { it.key }
+        for (uuid in toRemove) {
+            releasePendingUnsafe(uuid)
+        }
+    }
 
     /**
      * Resolves and caches tournament team_key for the player (non-bypass).
@@ -229,6 +429,14 @@ object TournamentManager {
             val next = (v ?: 0) - 1
             if (next <= 0) null else next
         }
+    }
+
+    fun teamFullOnlineKickMessageLegacy(): String {
+        val maxOnline = configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM).coerceAtLeast(1)
+        return Messages.prefixedLegacyString(
+            "messages.tournament.team_full_online",
+            mapOf("max" to maxOnline.toString())
+        )
     }
 
     /**
