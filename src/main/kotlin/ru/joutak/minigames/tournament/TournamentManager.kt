@@ -43,23 +43,16 @@ object TournamentManager {
 
     private var storage: TournamentStorage? = null
 
-    private val forceReadyTeams: MutableSet<String> = ConcurrentHashMap.newKeySet<String>()
+    private val forceReadyTeams: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    private val pendingLock = Any()
+    // Stores team_key resolved during pre-login (AsyncPlayerPreLoginEvent) to avoid a second DB query on join.
+    private val preLoginTeamKeyCache = ConcurrentHashMap<UUID, String>()
 
-    private data class PendingEntry(
-        val teamId: String,
-        val teamKey: String,
-        val createdAtMillis: Long,
-    )
+    // Online participants (non-bypass) mapped to their tournament team_key.
+    private val onlineTeamKeyByPlayer = ConcurrentHashMap<UUID, String>()
 
-    private val pendingPlayersByTeam = ConcurrentHashMap<String, MutableSet<UUID>>()
-    private val pendingByPlayer: MutableMap<UUID, PendingEntry> = ConcurrentHashMap()
-
-    private val onlinePlayersByTeam = ConcurrentHashMap<String, MutableSet<UUID>>()
-    private val onlineTeamByPlayer: MutableMap<UUID, String> = ConcurrentHashMap()
-
-    private const val PENDING_TTL_MILLIS: Long = 2 * 60 * 1000L
+    // Online participant count per team_key.
+    private val onlineCountByTeamKey = ConcurrentHashMap<String, Int>()
 
     @Volatile
     private var bypassUuids: Set<UUID> = emptySet()
@@ -78,18 +71,16 @@ object TournamentManager {
             storage = null
             bypassUuids = emptySet()
             forceReadyTeams.clear()
-            pendingByPlayer.clear()
-            pendingPlayersByTeam.clear()
-            onlinePlayersByTeam.clear()
-            onlineTeamByPlayer.clear()
+            preLoginTeamKeyCache.clear()
+            onlineTeamKeyByPlayer.clear()
+            onlineCountByTeamKey.clear()
             return
         }
 
         forceReadyTeams.clear()
-        pendingByPlayer.clear()
-        pendingPlayersByTeam.clear()
-        onlinePlayersByTeam.clear()
-        onlineTeamByPlayer.clear()
+        preLoginTeamKeyCache.clear()
+        onlineTeamKeyByPlayer.clear()
+        onlineCountByTeamKey.clear()
 
         bypassUuids = parseBypassUuids(configuration.get(ConfigKeys.TOURNAMENT_BYPASS_UUIDS))
 
@@ -148,15 +139,103 @@ object TournamentManager {
         initOk = false
         bypassUuids = emptySet()
         forceReadyTeams.clear()
-        pendingByPlayer.clear()
-        pendingPlayersByTeam.clear()
-        onlinePlayersByTeam.clear()
-        onlineTeamByPlayer.clear()
+        preLoginTeamKeyCache.clear()
+        onlineTeamKeyByPlayer.clear()
+        onlineCountByTeamKey.clear()
         try {
             storage?.close()
         } catch (_: Throwable) {
         }
         storage = null
+    }
+
+    /**
+     * Caches team_key resolved on AsyncPlayerPreLoginEvent.
+     * Thread-safe: may be called from async thread.
+     */
+    fun rememberPreLoginTeamKey(uuid: UUID, teamKey: String) {
+        if (!enabled) return
+        if (teamKey.isBlank()) return
+        preLoginTeamKeyCache[uuid] = teamKey
+    }
+
+    /**
+     * Consumes (and removes) cached team_key from pre-login stage.
+     */
+    fun consumePreLoginTeamKey(uuid: UUID): String? = preLoginTeamKeyCache.remove(uuid)
+
+    /**
+     * Resolves and caches tournament team_key for the player (non-bypass).
+     * May query DB; call from main thread rarely (e.g. once on join).
+     */
+    fun resolveTeamKey(uuid: UUID, name: String): String? {
+        if (!enabled) return null
+
+        onlineTeamKeyByPlayer[uuid]?.let { return it }
+        preLoginTeamKeyCache[uuid]?.let { return it }
+
+        val s = storage ?: return null
+        if (!initOk) return null
+
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        if (eventId.isBlank()) return null
+
+        return try {
+            s.findTeamKey(eventId, uuid, name)?.also { key ->
+                if (key.isNotBlank()) {
+                    onlineTeamKeyByPlayer[uuid] = key
+                }
+            }
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * Returns cached team_key for an online participant, if known.
+     */
+    fun getCachedTeamKey(uuid: UUID): String? = onlineTeamKeyByPlayer[uuid]
+
+    /**
+     * Online count of players for a given team_key.
+     */
+    fun getOnlineCount(teamKey: String): Int = onlineCountByTeamKey[teamKey] ?: 0
+
+    /**
+     * Marks a player as online participant of a given team_key (updates counters).
+     */
+    fun markOnline(uuid: UUID, teamKey: String) {
+        if (!enabled) return
+        if (teamKey.isBlank()) return
+
+        val prev = onlineTeamKeyByPlayer.put(uuid, teamKey)
+        if (prev != null && prev != teamKey) {
+            // Decrement previous key count if it changed (should not happen normally).
+            onlineCountByTeamKey.compute(prev) { _, v ->
+                val next = (v ?: 0) - 1
+                if (next <= 0) null else next
+            }
+        }
+
+        onlineCountByTeamKey.compute(teamKey) { _, v -> (v ?: 0) + 1 }
+    }
+
+    /**
+     * Unmarks player from online participant tracking.
+     */
+    fun unmarkOnline(uuid: UUID) {
+        val key = onlineTeamKeyByPlayer.remove(uuid) ?: return
+        onlineCountByTeamKey.compute(key) { _, v ->
+            val next = (v ?: 0) - 1
+            if (next <= 0) null else next
+        }
+    }
+
+    /**
+     * Clears all cached participant team keys (used after major reshuffles).
+     */
+    fun clearPreLoginCache(uuid: UUID) {
+        preLoginTeamKeyCache.remove(uuid)
     }
 
     /**
@@ -325,146 +404,6 @@ object TournamentManager {
         }
     }
 
-
-
-    /**
-     * Reserves a login slot for this team (online + pending prelogins) to prevent >N members from joining.
-     * Used only when tournament.prelogin.strict=true.
-     */
-    fun tryReserveTeamSlot(uuid: UUID, teamKey: String): Boolean {
-        if (!enabled) return true
-        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
-        if (eventId.isBlank()) return true
-
-        val teamId = "$eventId|$teamKey"
-        val maxOnline = configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM).coerceAtLeast(1)
-        val now = System.currentTimeMillis()
-
-        synchronized(pendingLock) {
-            cleanupExpiredPendingLocked(now)
-            // Drop duplicates for fast relogs.
-            releasePendingLocked(uuid)
-
-            val online = onlinePlayersByTeam[teamId]?.size ?: 0
-            val pending = pendingPlayersByTeam[teamId]?.size ?: 0
-
-            if (online + pending >= maxOnline) {
-                return false
-            }
-
-            val entry = PendingEntry(teamId = teamId, teamKey = teamKey, createdAtMillis = now)
-            pendingByPlayer[uuid] = entry
-            pendingPlayersByTeam.computeIfAbsent(teamId) { ConcurrentHashMap.newKeySet<UUID>() }.add(uuid)
-            return true
-        }
-    }
-
-    /** Moves reserved player from pending to online; returns teamKey if reservation existed. */
-    fun finalizeJoinFromPending(uuid: UUID): String? {
-        if (!enabled) return null
-        synchronized(pendingLock) {
-            val entry = pendingByPlayer.remove(uuid) ?: return null
-            pendingPlayersByTeam[entry.teamId]?.remove(uuid)
-            if (pendingPlayersByTeam[entry.teamId]?.isEmpty() == true) {
-                pendingPlayersByTeam.remove(entry.teamId)
-            }
-
-            onlineTeamByPlayer[uuid] = entry.teamId
-            onlinePlayersByTeam.computeIfAbsent(entry.teamId) { ConcurrentHashMap.newKeySet<UUID>() }.add(uuid)
-            return entry.teamKey
-        }
-    }
-
-    /** Registers player as online for the given team (used when prelogin strict is disabled). */
-    fun registerOnline(uuid: UUID, teamKey: String) {
-        if (!enabled) return
-        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
-        if (eventId.isBlank()) return
-
-        val teamId = "$eventId|$teamKey"
-        synchronized(pendingLock) {
-            // If we had a pending reservation (e.g. strict gate was enabled earlier), drop it.
-            releasePendingLocked(uuid)
-            onlineTeamByPlayer[uuid] = teamId
-            onlinePlayersByTeam.computeIfAbsent(teamId) { ConcurrentHashMap.newKeySet<UUID>() }.add(uuid)
-        }
-    }
-
-    fun unregisterOnline(uuid: UUID) {
-        if (!enabled) return
-        synchronized(pendingLock) {
-            releasePendingLocked(uuid)
-            val teamId = onlineTeamByPlayer.remove(uuid) ?: return
-            onlinePlayersByTeam[teamId]?.remove(uuid)
-            if (onlinePlayersByTeam[teamId]?.isEmpty() == true) {
-                onlinePlayersByTeam.remove(teamId)
-            }
-        }
-    }
-
-    fun releasePending(uuid: UUID) {
-        if (!enabled) return
-        synchronized(pendingLock) {
-            releasePendingLocked(uuid)
-        }
-    }
-
-    fun isTeamOnlineFull(teamKey: String): Boolean {
-        if (!enabled) return false
-        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
-        if (eventId.isBlank()) return false
-
-        val teamId = "$eventId|$teamKey"
-        val maxOnline = configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM).coerceAtLeast(1)
-        val now = System.currentTimeMillis()
-
-        synchronized(pendingLock) {
-            cleanupExpiredPendingLocked(now)
-            val online = onlinePlayersByTeam[teamId]?.size ?: 0
-            val pending = pendingPlayersByTeam[teamId]?.size ?: 0
-            return online + pending >= maxOnline
-        }
-    }
-
-    fun teamFullOnlineKickMessageLegacy(): String {
-        val key = if (Messages.has("messages.tournament.team_full_online")) {
-            "messages.tournament.team_full_online"
-        } else {
-            "messages.tournament.error"
-        }
-        return Messages.prefixedLegacyString(key)
-    }
-
-    fun teamFullOnlineKickMessageComponent(): Component {
-        val key = if (Messages.has("messages.tournament.team_full_online")) {
-            "messages.tournament.team_full_online"
-        } else {
-            "messages.tournament.error"
-        }
-        return Messages.prefixedComponent(key)
-    }
-
-    private fun cleanupExpiredPendingLocked(now: Long) {
-        val it = pendingByPlayer.entries.iterator()
-        while (it.hasNext()) {
-            val (uuid, entry) = it.next()
-            if (now - entry.createdAtMillis > PENDING_TTL_MILLIS) {
-                it.remove()
-                pendingPlayersByTeam[entry.teamId]?.remove(uuid)
-                if (pendingPlayersByTeam[entry.teamId]?.isEmpty() == true) {
-                    pendingPlayersByTeam.remove(entry.teamId)
-                }
-            }
-        }
-    }
-
-    private fun releasePendingLocked(uuid: UUID) {
-        val entry = pendingByPlayer.remove(uuid) ?: return
-        pendingPlayersByTeam[entry.teamId]?.remove(uuid)
-        if (pendingPlayersByTeam[entry.teamId]?.isEmpty() == true) {
-            pendingPlayersByTeam.remove(entry.teamId)
-        }
-    }
     fun denyKickMessageLegacy(reason: TournamentDenyReason?): String {
         val path = messagePathFor(reason)
         return Messages.prefixedLegacyString(path)

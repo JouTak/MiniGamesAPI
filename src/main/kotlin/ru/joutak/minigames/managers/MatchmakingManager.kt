@@ -13,6 +13,7 @@ import ru.joutak.minigames.event.GameInstanceReadyEvent
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.ui.QueueBossBarManager
 import ru.joutak.minigames.ui.LobbyScoreboardManager
+import ru.joutak.minigames.tournament.TournamentManager
 import java.util.ArrayDeque
 import java.util.UUID
 import kotlin.math.ceil
@@ -151,6 +152,12 @@ object MatchmakingManager {
             LobbyScoreboardManager.updateAll()
         }
 
+        if (removedFromInstance && MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
+                rebuildTournamentWaitingAssignments()
+            })
+        }
+
         // If player left a running match, restore lobby items (after other plugins clean inventory).
         if (removedFromActiveMatch && player.isOnline && !isPlayerInStartedGame(uuid)) {
             Bukkit.getScheduler().runTaskLater(MiniGamesCore.plugin, Runnable {
@@ -232,7 +239,73 @@ object MatchmakingManager {
 
         QueueBossBarManager.updateAll()
         LobbyScoreboardManager.updateAll()
+
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            // Move remaining teams into the next available instances.
+            rebuildTournamentWaitingAssignments()
+        }
+
         return instance
+    }
+
+    /**
+     * Tournament mode: rebuild waiting assignments by tournament team_key.
+     *
+     * Stage 2-3: only 4x4x4x4 (no partial rosters).
+     */
+    fun rebuildTournamentWaitingAssignments() {
+        if (!MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) return
+
+        val waitingInstances = activeInstances.filter { !it.started }
+        if (waitingInstances.isEmpty()) return
+
+        // Group online lobby players by tournament team key, excluding running matches.
+        val lobbyPlayers = Bukkit.getOnlinePlayers()
+            .filter { it.isOnline && !isPlayerInStartedGame(it.uniqueId) }
+
+        val byTeam = linkedMapOf<String, MutableList<Player>>()
+        for (p in lobbyPlayers) {
+            if (TournamentManager.isBypassUuid(p.uniqueId) || p.hasPermission("minigames.tournament.bypass")) continue
+
+            val teamKey = TournamentManager.getCachedTeamKey(p.uniqueId) ?: continue
+            byTeam.getOrPut(teamKey) { mutableListOf() }.add(p)
+
+            // Tournament does not use the old ready queue / selection queue.
+            GameQueue.removePlayer(p)
+        }
+
+        for (list in byTeam.values) {
+            list.sortBy { it.name.lowercase() }
+        }
+
+        val sortedTeams = byTeam.entries
+            .sortedWith(compareByDescending<Map.Entry<String, MutableList<Player>>> { it.value.size }
+                .thenBy { it.key })
+
+        // Reset all waiting instances and distribute teams from scratch.
+        waitingInstances.forEach { it.resetTournamentLobbyState() }
+
+        var teamPtr = 0
+        for (inst in waitingInstances) {
+            for (teamIndex in 0 until inst.config.teamCount) {
+                if (teamPtr >= sortedTeams.size) break
+
+                val entry = sortedTeams[teamPtr++]
+                val teamKey = entry.key
+                val members = entry.value
+
+                val picked = members.take(inst.config.playersPerTeam)
+                if (picked.isEmpty()) continue
+
+                inst.setTournamentTeamKey(teamIndex, teamKey)
+                inst.teams[teamIndex].addAll(picked)
+            }
+
+            checkReady(inst)
+        }
+
+        QueueBossBarManager.updateAll()
+        LobbyScoreboardManager.updateAll()
     }
 
     fun forceReady(instance: GameInstance) {
@@ -274,6 +347,11 @@ object MatchmakingManager {
     }
 
     private fun shouldBeReady(instance: GameInstance): Boolean {
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            clearDelayedState(instance)
+            return instance.isFull()
+        }
+
         // Full instance always starts as before.
         if (instance.isFull()) return true
 

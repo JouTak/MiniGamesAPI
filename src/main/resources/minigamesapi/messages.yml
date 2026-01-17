@@ -23,8 +23,8 @@ messages:
     no_attempts: '&cУ вашей команды закончились попытки на этот этап.'
     winner: '&cВаша команда уже прошла этот этап.'
     not_qualified: '&cВаша команда не прошла предыдущий этап.'
-    team_full_online: '&cНа этом сервере уже максимум игроков из вашей команды. Подождите, пока кто-то выйдет.'
     disabled_teamselect: '&cВ турнире команды назначаются организаторами.'
+    team_full_online: "&cСейчас на сервере уже &f{max}&c игрока вашей команды. Дождитесь, пока кто-то выйдет."
     # /ready should NOT change anything in tournament mode. Use /forceready to confirm incomplete roster.
     ready_confirm: '&eВы уверены?! &7Если хотите стартовать неполным составом, используйте &a/forceready&7.'
     forceready_only_in_tournament: '&cКоманда доступна только в режиме турнира.'

@@ -12,6 +12,12 @@ class GameInstance(val config: GameInstanceConfig) {
     val teams = MutableList(config.teamCount) { mutableListOf<Player>() }
 
     /**
+     * Tournament-only mapping: teamIndex -> tournament team_key (for results / roster binding).
+     * It is maintained by the tournament auto-matchmaking logic.
+     */
+    val tournamentTeamKeys: MutableList<String?> = MutableList(config.teamCount) { null }
+
+    /**
      * Round-robin cursor for /ready (and lobby hotbar READY action).
      * It is intentionally per-instance to distribute players across teams evenly.
      */
@@ -138,4 +144,25 @@ class GameInstance(val config: GameInstanceConfig) {
         }
         return removedAny
     }
+
+    fun setTournamentTeamKey(teamIndex: Int, teamKey: String?) {
+        if (teamIndex !in 0 until tournamentTeamKeys.size) return
+        tournamentTeamKeys[teamIndex] = teamKey
+    }
+
+    fun getTournamentTeamKey(teamIndex: Int): String? {
+        if (teamIndex !in 0 until tournamentTeamKeys.size) return null
+        return tournamentTeamKeys[teamIndex]
+    }
+
+    /**
+     * Clears waiting teams and tournament mapping for reuse (only for non-started instances).
+     */
+    fun resetTournamentLobbyState() {
+        if (started) return
+        for (t in teams) t.clear()
+        for (i in tournamentTeamKeys.indices) tournamentTeamKeys[i] = null
+        readyRoundRobinCursor = 0
+    }
+
 }

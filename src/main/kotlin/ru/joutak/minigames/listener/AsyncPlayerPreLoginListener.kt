@@ -29,17 +29,7 @@ object AsyncPlayerPreLoginListener : Listener {
                     return
                 }
 
-                val teamKey = gate.teamKey
-                if (teamKey != null) {
-                    val reserved = TournamentManager.tryReserveTeamSlot(uuid, teamKey)
-                    if (!reserved) {
-                        event.disallow(
-                            AsyncPlayerPreLoginEvent.Result.KICK_WHITELIST,
-                            TournamentManager.teamFullOnlineKickMessageLegacy()
-                        )
-                        return
-                    }
-                }
+                gate.teamKey?.let { TournamentManager.rememberPreLoginTeamKey(uuid, it) }
             }
         }
 

@@ -54,6 +54,16 @@ object ConfigKeys {
     }
 
     /**
+     * Max online players allowed from the same tournament team_key at once.
+     * Prevents overfilling a team when tournament matches are strictly 4v4v4v4.
+     */
+    val TOURNAMENT_MAX_ONLINE_PER_TEAM = object : ConfigKey<Int>("tournament.max_online_per_team", 4) {
+        override fun validate(value: Int) {
+            require(value >= 1) { "tournament.max_online_per_team must be >= 1" }
+        }
+    }
+
+    /**
      * Permission for admin bypass in tournament mode.
      * IMPORTANT: PreLoginEvent does not have permissions, so uuid list is also supported.
      */
@@ -70,16 +80,6 @@ object ConfigKeys {
      * If false, gate may be applied later on join (useful when name->uuid binding is needed).
      */
     val TOURNAMENT_PRELOGIN_STRICT = object : ConfigKey<Boolean>("tournament.prelogin.strict", true) {}
-
-    /**
-     * Max number of ONLINE (connected) players from the same tournament team allowed on this server.
-     * Default: 4 (for 4x4x4x4 formats).
-     */
-    val TOURNAMENT_MAX_ONLINE_PER_TEAM = object : ConfigKey<Int>("tournament.max_online_per_team", 4) {
-        override fun validate(value: Int) {
-            require(value >= 1) { "tournament.max_online_per_team must be >= 1" }
-        }
-    }
 
     val USE_LIBRE_LOGIN = object : ConfigKey<Boolean>("uuid.use_libre_login", true) {}
 

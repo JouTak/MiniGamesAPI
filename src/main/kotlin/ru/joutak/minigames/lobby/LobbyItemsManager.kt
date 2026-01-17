@@ -13,6 +13,7 @@ import org.bukkit.inventory.ItemStack
 import org.bukkit.inventory.PlayerInventory
 import org.bukkit.persistence.PersistentDataType
 import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.ui.QueueBossBarManager
@@ -120,9 +121,15 @@ object LobbyItemsManager {
 
         val inv = player.inventory
 
+        val tournament = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
+
         for (def in hotbarItems) {
             if (!def.enabled) continue
             if (def.slot !in 0..8) continue
+
+            // In tournament mode, players should not use manual ready / team selection.
+            if (tournament && (def.action == LobbyAction.Ready || def.action == LobbyAction.TeamSelect)) continue
+
             placeFixed(inv, def.slot, def.item.clone())
         }
     }
