@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Material
+import org.bukkit.GameMode
 import org.bukkit.NamespacedKey
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
@@ -87,6 +88,13 @@ object LobbyItemsManager {
     fun getAction(id: String): LobbyAction? = actionsById[id]
 
     fun ensure(player: Player) {
+        // Spectators should not get lobby items/UI (used by admin /spectate in minigames).
+        if (player.gameMode == GameMode.SPECTATOR) {
+            remove(player)
+            QueueBossBarManager.ensure(player)
+            return
+        }
+
         if (!lobbyItemsEnabled) {
             remove(player)
             QueueBossBarManager.ensure(player)

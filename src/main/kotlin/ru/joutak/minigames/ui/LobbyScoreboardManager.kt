@@ -1,6 +1,7 @@
 package ru.joutak.minigames.ui
 
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
 import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import org.bukkit.scoreboard.DisplaySlot
@@ -63,7 +64,7 @@ object LobbyScoreboardManager {
         states.keys.removeIf { Bukkit.getPlayer(it) == null }
 
         Bukkit.getOnlinePlayers().forEach { p ->
-            if (MatchmakingManager.isPlayerInStartedGame(p.uniqueId)) {
+            if (p.gameMode == GameMode.SPECTATOR || MatchmakingManager.isPlayerInStartedGame(p.uniqueId)) {
                 remove(p)
             } else {
                 ensure(p)
@@ -73,6 +74,11 @@ object LobbyScoreboardManager {
     }
 
     fun ensure(player: Player) {
+        if (player.gameMode == GameMode.SPECTATOR) {
+            remove(player)
+            return
+        }
+
         if (states.containsKey(player.uniqueId)) return
 
         val mgr = Bukkit.getScoreboardManager() ?: return

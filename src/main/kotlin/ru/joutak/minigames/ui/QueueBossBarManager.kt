@@ -3,6 +3,7 @@ package ru.joutak.minigames.ui
 import net.kyori.adventure.bossbar.BossBar
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
+import org.bukkit.GameMode
 import org.bukkit.entity.Player
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
@@ -99,7 +100,7 @@ object QueueBossBarManager {
     }
 
     private fun isLobbyPlayer(player: Player): Boolean {
-        return player.isOnline && !MatchmakingManager.isPlayerInStartedGame(player.uniqueId)
+        return player.isOnline && player.gameMode != GameMode.SPECTATOR && !MatchmakingManager.isPlayerInStartedGame(player.uniqueId)
     }
 
     private fun show(player: Player) {
