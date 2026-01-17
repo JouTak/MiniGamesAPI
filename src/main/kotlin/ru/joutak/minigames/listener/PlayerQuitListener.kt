@@ -6,6 +6,7 @@ import org.bukkit.event.player.PlayerQuitEvent
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.ui.QueueBossBarManager
+import ru.joutak.minigames.tournament.TournamentManager
 
 object PlayerQuitListener : Listener {
 
@@ -20,5 +21,8 @@ object PlayerQuitListener : Listener {
 
         // На всякий случай гарантированно скрываем бар при выходе
         QueueBossBarManager.remove(player)
+
+        // Tournament: free online slot for the team
+        TournamentManager.unregisterOnline(player.uniqueId)
     }
 }

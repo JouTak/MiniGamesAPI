@@ -239,6 +239,11 @@ object MiniGamesCore {
                 yaml.set("mode.display_name", finalModeName.uppercase())
             }
 
+            // Ensure tournament team cap key exists (used for strict prelogin team limit).
+            if (!yaml.contains("tournament.max_online_per_team")) {
+                yaml.set("tournament.max_online_per_team", 4)
+            }
+
             if (version < 2) {
                 yaml.set("minigamesapi.config_version", 2)
             }
@@ -310,6 +315,19 @@ object MiniGamesCore {
                 msg.save(messagesPath.toFile())
             } catch (_: Throwable) {
             }
+        }
+
+        // Ensure new message keys exist in existing installations (best-effort).
+        try {
+            val msgFile = messagesPath.toFile()
+            if (msgFile.exists()) {
+                val msg = YamlConfiguration.loadConfiguration(msgFile)
+                if (!msg.contains("messages.tournament.team_full_online")) {
+                    msg.set("messages.tournament.team_full_online", "&cНа этом сервере уже максимум игроков из вашей команды. Подождите, пока кто-то выйдет.")
+                    msg.save(msgFile)
+                }
+            }
+        } catch (_: Throwable) {
         }
     }
 
@@ -572,6 +590,19 @@ spartakiad:
   attempts: 5
   team_mode: false
 
+tournament:
+  enabled: false
+  max_online_per_team: 4
+  event_id: "spartakiad"
+  stage: "round1"
+  previous_stage: ""
+  default_attempts: 1
+  prelogin:
+    strict: true
+  bypass:
+    permission: "minigamesapi.tournament.bypass"
+    uuids: []
+
 matchmaking:
   start:
     enabled: false
@@ -647,6 +678,7 @@ messages:
     no_attempts: "&cУ вашей команды закончились попытки на этот этап."
     winner: "&cВаша команда уже прошла этот этап."
     not_qualified: "&cВаша команда не прошла предыдущий этап."
+    team_full_online: "&cНа этом сервере уже максимум игроков из вашей команды. Подождите, пока кто-то выйдет."
     disabled_teamselect: "&cВ турнире команды назначаются организаторами."
     # /ready should NOT change anything in tournament mode. Use /forceready to confirm incomplete roster.
     ready_confirm: "&eВы уверены?! &7Если хотите стартовать неполным составом, используйте &a/forceready&7."

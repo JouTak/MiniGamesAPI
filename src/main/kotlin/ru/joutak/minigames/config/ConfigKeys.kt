@@ -71,6 +71,16 @@ object ConfigKeys {
      */
     val TOURNAMENT_PRELOGIN_STRICT = object : ConfigKey<Boolean>("tournament.prelogin.strict", true) {}
 
+    /**
+     * Max number of ONLINE (connected) players from the same tournament team allowed on this server.
+     * Default: 4 (for 4x4x4x4 formats).
+     */
+    val TOURNAMENT_MAX_ONLINE_PER_TEAM = object : ConfigKey<Int>("tournament.max_online_per_team", 4) {
+        override fun validate(value: Int) {
+            require(value >= 1) { "tournament.max_online_per_team must be >= 1" }
+        }
+    }
+
     val USE_LIBRE_LOGIN = object : ConfigKey<Boolean>("uuid.use_libre_login", true) {}
 
     val STORAGE_DEBOUNCE_MILLIS = object : ConfigKey<Long>("storage.debounce_millis", 500) {}
