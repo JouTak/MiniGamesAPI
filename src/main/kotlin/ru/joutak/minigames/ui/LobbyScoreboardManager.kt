@@ -13,6 +13,7 @@ import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.managers.MatchmakingManager
+import ru.joutak.minigames.tournament.TournamentManager
 import java.util.UUID
 
 /**
@@ -132,7 +133,7 @@ object LobbyScoreboardManager {
     private fun buildLines(player: Player): List<String> {
         val modeDisplay = MiniGamesCore.configuration.get(ConfigKeys.MODE_DISPLAY_NAME)
         val yaml = getApiYaml()
-        val placeholders = mapOf(
+        val basePlaceholders = mapOf(
             "mode_display" to modeDisplay,
             "nick" to player.name
         )
@@ -142,23 +143,73 @@ object LobbyScoreboardManager {
         lines += formatLine(
             key = "ui.lobby.scoreboard.lines.server",
             fallback = "&7Вы играете на &bITMOcraft &fminiGAMES",
-            placeholders = placeholders
+            placeholders = basePlaceholders
         )
         lines += formatLine(
             key = "ui.lobby.scoreboard.lines.mode",
             fallback = "&7Режим: &e{mode_display}",
-            placeholders = placeholders
+            placeholders = basePlaceholders
         )
         lines += formatLine(
             key = "ui.lobby.scoreboard.lines.nick",
             fallback = "&7Ваш ник: &a{nick}",
-            placeholders = placeholders
+            placeholders = basePlaceholders
         )
         lines += formatLine(
             key = "ui.lobby.scoreboard.lines.ip",
             fallback = "&7IP: &6craft.itmo.ru",
-            placeholders = placeholders
+            placeholders = basePlaceholders
         )
+
+        val tournamentEnabled = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
+        val myTeamKey = if (tournamentEnabled) TournamentManager.getCachedTeamKey(player.uniqueId) else null
+
+        if (tournamentEnabled && myTeamKey != null) {
+            // Best-effort async refresh (rate-limited inside TournamentManager).
+            TournamentManager.scheduleTeamUiRefresh(myTeamKey)
+            val info = TournamentManager.getTeamUiInfo(myTeamKey)
+
+            val maxOnline = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM)
+            val teamName = info.displayName?.takeIf { it.isNotBlank() } ?: myTeamKey
+            val frStatus = if (info.forceReady) {
+                Messages.getString("ui.lobby.scoreboard.tournament.forceready_on") ?: "&aON"
+            } else {
+                Messages.getString("ui.lobby.scoreboard.tournament.forceready_off") ?: "&cOFF"
+            }
+            val attempts = info.attemptsLeft?.toString() ?: "?"
+
+            val tp = mapOf(
+                "team_key" to myTeamKey,
+                "team_name" to teamName,
+                "online" to info.onlineCount.toString(),
+                "max" to maxOnline.toString(),
+                "attempts" to attempts,
+                "forceready_status" to frStatus,
+            )
+
+            lines += "&8 "
+            lines += formatLine(
+                key = "ui.lobby.scoreboard.tournament.header",
+                fallback = "&6Турнир",
+                placeholders = tp
+            )
+            lines += formatLine(
+                key = "ui.lobby.scoreboard.tournament.team",
+                fallback = "&7Команда: &b{team_name}",
+                placeholders = tp
+            )
+            lines += formatLine(
+                key = "ui.lobby.scoreboard.tournament.status",
+                fallback = "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts}",
+                placeholders = tp
+            )
+            lines += formatLine(
+                key = "ui.lobby.scoreboard.tournament.forceready",
+                fallback = "&7Forceready: {forceready_status}",
+                placeholders = tp
+            )
+        }
+
         lines += "&8 "
 
         val instance = selectInstanceFor(player)
@@ -166,24 +217,58 @@ object LobbyScoreboardManager {
             lines += formatLine(
                 key = "ui.lobby.scoreboard.empty",
                 fallback = "&7Нет набора игроков",
-                placeholders = placeholders
+                placeholders = basePlaceholders
             )
             return trimToSidebarLimit(lines)
         }
 
         val maxPerTeam = instance.config.playersPerTeam
+
         instance.teams.forEachIndexed { index, team ->
             val teamNumber = index + 1
-            val teamName = resolveTeamName(yaml, teamNumber)
 
-            lines += "$teamName &7(${team.size}/$maxPerTeam)"
+            if (tournamentEnabled) {
+                val teamKey = instance.getTournamentTeamKey(index)
 
-            val membersLine = if (team.isEmpty()) {
-                "&8- &7пусто"
+                val rawName = when {
+                    teamKey.isNullOrBlank() -> Messages.getString("ui.lobby.scoreboard.tournament.unassigned") ?: "&8—"
+                    else -> TournamentManager.getCachedTeamDisplayName(teamKey) ?: teamKey
+                }
+
+                val cfgColor = parseTeamColor(yaml.getString("teamselect.teams.$teamNumber.color"))
+                val coloredName = if (cfgColor != null) {
+                    applyLeadingColor(colorize(rawName), cfgColor)
+                } else {
+                    rawName
+                }
+
+                val highlight = if (teamKey != null && myTeamKey != null && teamKey.equals(myTeamKey, ignoreCase = true)) {
+                    "&e» "
+                } else {
+                    ""
+                }
+
+                val fr = if (teamKey != null && TournamentManager.isTeamForceReady(teamKey)) " &aFR" else ""
+
+                val members = if (team.isEmpty()) {
+                    "&7пусто"
+                } else {
+                    team.joinToString(", ") { it.name }.limitVisible(18)
+                }
+
+                lines += "$highlight$coloredName &7(${team.size}/$maxPerTeam)$fr &8- &f$members"
             } else {
-                "&8- &f" + team.joinToString(", ") { it.name }.limitVisible(32)
+                val teamName = resolveTeamName(yaml, teamNumber)
+
+                lines += "$teamName &7(${team.size}/$maxPerTeam)"
+
+                val membersLine = if (team.isEmpty()) {
+                    "&8- &7пусто"
+                } else {
+                    "&8- &f" + team.joinToString(", ") { it.name }.limitVisible(32)
+                }
+                lines += membersLine
             }
-            lines += membersLine
         }
 
         return trimToSidebarLimit(lines)

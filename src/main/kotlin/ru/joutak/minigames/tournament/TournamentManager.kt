@@ -11,6 +11,7 @@ import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
 import ru.joutak.minigames.tournament.model.TournamentGateResult
 import ru.joutak.minigames.tournament.model.TournamentTeamCaptain
+import ru.joutak.minigames.tournament.model.TournamentTeamProgress
 import ru.joutak.minigames.tournament.storage.JdbcTournamentStorage
 import ru.joutak.minigames.tournament.storage.TournamentStorage
 import java.io.File
@@ -21,6 +22,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 private const val TEAM_CAP_RESERVATION_TTL_MS: Long = 60_000L
+private const val TEAM_UI_CACHE_TTL_MS: Long = 20_000L
 
 object TournamentManager {
 
@@ -77,6 +79,25 @@ object TournamentManager {
     // Online participant count per team_key.
     private val onlineCountByTeamKey = ConcurrentHashMap<String, Int>()
 
+    data class TeamUiInfo(
+        val teamKey: String,
+        val displayName: String?,
+        val attemptsLeft: Int?,
+        val won: Boolean?,
+        val onlineCount: Int,
+        val forceReady: Boolean,
+    )
+
+    private data class TeamUiCache(
+        @Volatile var displayName: String? = null,
+        @Volatile var attemptsLeft: Int? = null,
+        @Volatile var won: Boolean? = null,
+        @Volatile var lastFetchMs: Long = 0L,
+        @Volatile var inFlight: Boolean = false,
+    )
+
+    private val teamUiCache = ConcurrentHashMap<String, TeamUiCache>()
+
     @Volatile
     private var bypassUuids: Set<UUID> = emptySet()
 
@@ -103,6 +124,7 @@ object TournamentManager {
             preLoginTeamKeyCache.clear()
             onlineTeamKeyByPlayer.clear()
             onlineCountByTeamKey.clear()
+            teamUiCache.clear()
             pendingSlotsByPlayer.clear()
             pendingCountByTeamKey.clear()
             return
@@ -112,6 +134,7 @@ object TournamentManager {
         preLoginTeamKeyCache.clear()
         onlineTeamKeyByPlayer.clear()
         onlineCountByTeamKey.clear()
+        teamUiCache.clear()
         pendingSlotsByPlayer.clear()
         pendingCountByTeamKey.clear()
 
@@ -175,6 +198,7 @@ object TournamentManager {
         preLoginTeamKeyCache.clear()
         onlineTeamKeyByPlayer.clear()
         onlineCountByTeamKey.clear()
+        teamUiCache.clear()
         pendingSlotsByPlayer.clear()
         pendingCountByTeamKey.clear()
         try {
@@ -246,9 +270,19 @@ object TournamentManager {
 
                 // Decrement attempts for all participating teams.
                 val participating = teamKeyByTeamId.values.toSet()
+                val cacheNow = System.currentTimeMillis()
                 for (teamKey in participating) {
                     s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts)
-                    s.decrementAttempts(eventId, stage, teamKey, 1)
+                    val updated = s.decrementAttempts(eventId, stage, teamKey, 1)
+
+                    if (updated != null) {
+                        val c = teamUiCache[teamKey]
+                        if (c != null) {
+                            c.attemptsLeft = updated.attemptsLeft
+                            c.won = updated.won
+                            c.lastFetchMs = cacheNow
+                        }
+                    }
 
                     // forceReady should not be sticky between matches
                     forceReadyTeams.remove("$eventId|$teamKey")
@@ -263,6 +297,11 @@ object TournamentManager {
                     if (!winnerKey.isNullOrBlank()) {
                         s.getOrCreateProgress(eventId, stage, winnerKey, defaultAttempts)
                         s.setWon(eventId, stage, winnerKey, true)
+                        val c = teamUiCache[winnerKey]
+                        if (c != null) {
+                            c.won = true
+                            c.lastFetchMs = System.currentTimeMillis()
+                        }
                     }
                 }
 
@@ -408,6 +447,58 @@ object TournamentManager {
      */
     fun getOnlineCount(teamKey: String): Int = onlineCountByTeamKey[teamKey] ?: 0
 
+    fun getTeamUiInfo(teamKey: String): TeamUiInfo {
+        val c = teamUiCache[teamKey]
+        return TeamUiInfo(
+            teamKey = teamKey,
+            displayName = c?.displayName,
+            attemptsLeft = c?.attemptsLeft,
+            won = c?.won,
+            onlineCount = getOnlineCount(teamKey),
+            forceReady = isTeamForceReady(teamKey),
+        )
+    }
+
+    fun getCachedTeamDisplayName(teamKey: String): String? = teamUiCache[teamKey]?.displayName
+
+    fun scheduleTeamUiRefresh(teamKey: String, force: Boolean = false) {
+        if (!enabled) return
+        if (teamKey.isBlank()) return
+
+        val s = storage ?: return
+        if (!initOk) return
+
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        val stage = configuration.get(ConfigKeys.TOURNAMENT_STAGE).trim()
+        if (eventId.isBlank() || stage.isBlank()) return
+
+        val now = System.currentTimeMillis()
+        val cache = teamUiCache.computeIfAbsent(teamKey) { TeamUiCache() }
+        if (!force && now - cache.lastFetchMs < TEAM_UI_CACHE_TTL_MS) return
+        if (cache.inFlight) return
+        cache.inFlight = true
+
+        CompletableFuture.runAsync({
+            try {
+                val name = try { s.getTeamDisplayName(eventId, teamKey) } catch (_: Throwable) { null }
+                val defaultAttempts = configuration.get(ConfigKeys.TOURNAMENT_DEFAULT_ATTEMPTS)
+                val progress = try { s.getProgress(eventId, stage, teamKey) } catch (_: Throwable) { null }
+                    ?: try { s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts) } catch (_: Throwable) { null }
+
+                if (!name.isNullOrBlank()) {
+                    cache.displayName = name
+                }
+                if (progress != null) {
+                    cache.attemptsLeft = progress.attemptsLeft
+                    cache.won = progress.won
+                }
+                cache.lastFetchMs = System.currentTimeMillis()
+            } finally {
+                cache.inFlight = false
+            }
+        }, executor)
+    }
+
     /**
      * Marks a player as online participant of a given team_key (updates counters).
      */
@@ -425,6 +516,7 @@ object TournamentManager {
         }
 
         onlineCountByTeamKey.compute(teamKey) { _, v -> (v ?: 0) + 1 }
+        scheduleTeamUiRefresh(teamKey)
     }
 
     /**

@@ -21,6 +21,8 @@ interface TournamentStorage {
 
     fun getTeamCaptain(eventId: String, teamKey: String): TournamentTeamCaptain?
 
+    fun getTeamDisplayName(eventId: String, teamKey: String): String?
+
     fun getProgress(eventId: String, stage: String, teamKey: String): TournamentTeamProgress?
 
     fun getOrCreateProgress(eventId: String, stage: String, teamKey: String, defaultAttempts: Int): TournamentTeamProgress

@@ -116,6 +116,14 @@ ui:
         nick: "&7Твой ник: &a{nick}"
         ip: "&7IP для друзей: &6craft.itmo.ru"
       empty: "&7Нет набора игроков"
+      tournament:
+        header: "&6Турнир"
+        team: "&7Команда: &b{team_name}"
+        status: "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts}"
+        forceready: "&7Forceready: {forceready_status}"
+        forceready_on: "&aON"
+        forceready_off: "&cOFF"
+        unassigned: "&8—"
     items:
       quick_ready:
         name: '&aГотов'

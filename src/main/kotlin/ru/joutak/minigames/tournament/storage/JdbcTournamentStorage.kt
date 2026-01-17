@@ -162,6 +162,22 @@ class JdbcTournamentStorage(
         }
     }
 
+    override fun getTeamDisplayName(eventId: String, teamKey: String): String? {
+        openConnection().use { conn ->
+            conn.prepareStatement(
+                "SELECT display_name FROM tournament_team WHERE event_id=? AND team_key=? LIMIT 1"
+            ).use { ps ->
+                ps.setString(1, eventId)
+                ps.setString(2, teamKey)
+                ps.executeQuery().use { rs ->
+                    if (!rs.next()) return null
+                    return rs.getString(1)?.trim()?.takeIf { it.isNotEmpty() }
+                }
+            }
+        }
+    }
+
+
     override fun getProgress(eventId: String, stage: String, teamKey: String): TournamentTeamProgress? {
         openConnection().use { conn ->
             conn.prepareStatement(
