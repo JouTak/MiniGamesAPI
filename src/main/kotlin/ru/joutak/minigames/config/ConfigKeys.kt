@@ -139,6 +139,9 @@ object ConfigKeys {
      */
     val CEREMONY_CLONE_WORLD = object : ConfigKey<String>("ceremony.clone_world", "") {}
 
+    
+    val CEREMONY_EXIT_WORLD = object : ConfigKey<String>("ceremony.exit_world", "") {}
+
     /**
      * Delay (ticks) before moving match participants to ceremony (to let modes finish ENDING/CLEANUP).
      */

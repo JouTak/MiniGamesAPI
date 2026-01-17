@@ -9,6 +9,7 @@ import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.results.model.MatchResult
+import ru.joutak.minigames.results.model.TeamResult
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -30,9 +31,17 @@ object CeremonyManager {
     }
 
     data class PlayerAssignment(
+        val matchId: UUID,
         val worldName: String,
         val region: PedestalRegion,
         val seat: Location,
+        val pedestalIndex: Int,
+    )
+
+    data class CeremonySession(
+        val matchId: UUID,
+        val worldName: String,
+        val createdAtMs: Long,
     )
 
     private lateinit var plugin: JavaPlugin
@@ -44,9 +53,7 @@ object CeremonyManager {
     @Volatile
     private var serverId: String = "server-1"
 
-    @Volatile
-    private var activeWorldName: String? = null
-
+    private val sessionsByWorld = ConcurrentHashMap<String, CeremonySession>()
     private val assignments = ConcurrentHashMap<UUID, PlayerAssignment>()
 
     fun initialize(plugin: JavaPlugin, configuration: Config, resultsFile: File) {
@@ -64,7 +71,7 @@ object CeremonyManager {
 
     fun shutdown() {
         assignments.clear()
-        activeWorldName = null
+        sessionsByWorld.clear()
         initialized = false
     }
 
@@ -73,8 +80,6 @@ object CeremonyManager {
         return configuration.get(ConfigKeys.CEREMONY_ENABLED) || configuration.get(ConfigKeys.TOURNAMENT_CEREMONY_ENABLED)
     }
 
-    fun getActiveWorldName(): String? = activeWorldName
-
     fun getAssignment(uuid: UUID): PlayerAssignment? = assignments[uuid]
 
     fun clearAssignment(uuid: UUID) {
@@ -82,8 +87,19 @@ object CeremonyManager {
     }
 
     fun isCeremonyWorld(world: World?): Boolean {
-        val aw = activeWorldName ?: return false
-        return world != null && world.name == aw
+        val name = world?.name ?: return false
+        return sessionsByWorld.containsKey(name)
+    }
+
+    fun resolveExitLocation(): Location? {
+        val raw = configuration.get(ConfigKeys.CEREMONY_EXIT_WORLD).trim()
+        val w = if (raw.isNotBlank()) {
+            Bukkit.getWorld(raw)
+        } else {
+            Bukkit.getWorlds().firstOrNull { !isCeremonyWorld(it) }
+        } ?: return null
+
+        return safeSpawn(w)
     }
 
     fun handleMatchEnded(result: MatchResult) {
@@ -101,46 +117,107 @@ object CeremonyManager {
     }
 
     private fun moveMatchParticipantsToCeremony(result: MatchResult) {
-        val world = ensureCeremonyWorld() ?: return
+        // Build podium mapping (placement 1..4 -> pedestal index 0..3)
+        val podiumTeamIds = resolvePodiumTeamIds(result)
+        if (podiumTeamIds.size < 4) return
 
-        val pedestals = parsePedestals(world, configuration.get(ConfigKeys.CEREMONY_PEDESTALS))
-
-        val onlineByTeam = HashMap<Int, MutableList<Player>>()
-        for (pr in result.players) {
-            val p = Bukkit.getPlayer(pr.playerUuid) ?: continue
-            if (!p.isOnline) continue
-            val teamId = pr.teamId
-            val idx = if (teamId == null) ((p.uniqueId.hashCode() and Int.MAX_VALUE) % 4) else ((teamId % 4) + 4) % 4
-            onlineByTeam.computeIfAbsent(idx) { ArrayList() }.add(p)
+        val pedestalIndexByTeamId = HashMap<Int, Int>(4)
+        for (i in 0..3) {
+            pedestalIndexByTeamId[podiumTeamIds[i]] = i
         }
 
+        // Collect ONLINE participants only.
+        val playersByPedestal = HashMap<Int, MutableList<Player>>()
+        for (pr in result.players) {
+            val teamId = pr.teamId ?: continue
+            val pedestalIdx = pedestalIndexByTeamId[teamId] ?: continue
+
+            val p = Bukkit.getPlayer(pr.playerUuid) ?: continue
+            if (!p.isOnline) continue
+
+            playersByPedestal.computeIfAbsent(pedestalIdx) { ArrayList() }.add(p)
+        }
+
+        // If nobody online -> do nothing and DO NOT clone ceremony world.
+        if (playersByPedestal.isEmpty()) return
+
         // Deterministic ordering for stable seat assignment.
-        for (entry in onlineByTeam.entries) {
+        for (entry in playersByPedestal.entries) {
             entry.value.sortBy { it.uniqueId.toString() }
         }
 
+        val world = ensureCeremonyWorldForMatch(result.matchId) ?: return
+
+        val pedestals = parsePedestals(world, configuration.get(ConfigKeys.CEREMONY_PEDESTALS))
         val fallbackLoc = safeSpawn(world)
 
-        for ((teamIndex, players) in onlineByTeam.entries) {
-            val region = pedestals.getOrNull(teamIndex)
-            if (region == null) {
-                for (p in players) {
-                    assignments[p.uniqueId] = PlayerAssignment(world.name, PedestalRegion(fallbackLoc.blockX, fallbackLoc.blockX, fallbackLoc.blockZ, fallbackLoc.blockZ, fallbackLoc.blockY), fallbackLoc)
-                    p.teleport(fallbackLoc)
-                }
-                continue
-            }
+        // Register session first so outsiders are gated immediately.
+        sessionsByWorld[world.name] = CeremonySession(result.matchId, world.name, System.currentTimeMillis())
+
+        for ((pedestalIndex, players) in playersByPedestal.entries) {
+            val region = pedestals.getOrNull(pedestalIndex)
+                ?: PedestalRegion(fallbackLoc.blockX, fallbackLoc.blockX, fallbackLoc.blockZ, fallbackLoc.blockZ, fallbackLoc.blockY)
 
             val seats = buildSeats(world, region)
+            val seat0 = seats.firstOrNull() ?: fallbackLoc
+
             for ((i, p) in players.withIndex()) {
-                val seat = seats.getOrNull(i) ?: seats.firstOrNull() ?: fallbackLoc
-                assignments[p.uniqueId] = PlayerAssignment(world.name, region, seat)
+                val seat = seats.getOrNull(i) ?: seat0
+                assignments[p.uniqueId] = PlayerAssignment(
+                    matchId = result.matchId,
+                    worldName = world.name,
+                    region = region,
+                    seat = seat,
+                    pedestalIndex = pedestalIndex,
+                )
                 p.teleport(seat)
             }
         }
+    }
 
-        // Players without a teamId in result.players but still online in match world won't be moved.
-        // This is intentional: MiniGamesAPI cannot reliably know the full participant list without mode cooperation.
+    private fun resolvePodiumTeamIds(result: MatchResult): IntArray {
+        // Prefer explicit placements.
+        val teams = result.teams
+        if (teams.isEmpty()) {
+            // Fallback: use teamIds from players.
+            val ids = result.players.mapNotNull { it.teamId }.distinct().take(4)
+            if (ids.size < 4) return IntArray(0)
+            return ids.sorted().toIntArray()
+        }
+
+        val byPlace = HashMap<Int, Int>()
+        for (t in teams) {
+            val p = t.placement
+            if (p != null && p in 1..4 && !byPlace.containsKey(p)) {
+                byPlace[p] = t.teamId
+            }
+        }
+
+        if (!byPlace.containsKey(1)) {
+            val winner = teams.firstOrNull { it.isWinner }?.teamId
+            if (winner != null) byPlace[1] = winner
+        }
+
+        val used = HashSet<Int>(byPlace.values)
+        val remainingTeams = teams
+            .filter { it.teamId !in used }
+            .sortedWith(compareByDescending<TeamResult> { it.score ?: Double.NEGATIVE_INFINITY }.thenBy { it.teamId })
+
+        val remainingPlaces = (1..4).filter { !byPlace.containsKey(it) }
+        val itTeams = remainingTeams.iterator()
+        for (pl in remainingPlaces) {
+            if (!itTeams.hasNext()) break
+            byPlace[pl] = itTeams.next().teamId
+        }
+
+        if (byPlace.size < 4) {
+            // Last-resort: stable teamId ordering
+            val ids = teams.map { it.teamId }.distinct().take(4)
+            if (ids.size < 4) return IntArray(0)
+            return ids.sorted().toIntArray()
+        }
+
+        return intArrayOf(byPlace[1]!!, byPlace[2]!!, byPlace[3]!!, byPlace[4]!!)
     }
 
     private fun safeSpawn(world: World): Location {
@@ -154,59 +231,69 @@ object CeremonyManager {
         return configuration.get(ConfigKeys.TOURNAMENT_CEREMONY_WORLD).trim().ifBlank { "tourney_ceremony" }
     }
 
-    private fun resolveCloneWorldName(templateWorld: String): String {
-        val configured = configuration.get(ConfigKeys.CEREMONY_CLONE_WORLD).trim()
-        if (configured.isNotBlank()) return configured
-
-        // stable per-server clone name
-        val sid = serverId.trim().ifBlank { "server" }.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val tw = templateWorld.trim().replace(Regex("[^A-Za-z0-9._-]"), "_")
-        return "ceremony_${tw}_$sid"
-    }
-
-    private fun ensureCeremonyWorld(): World? {
+    private fun ensureCeremonyWorldForMatch(matchId: UUID): World? {
         val template = resolveTemplateWorldName()
         if (template.isBlank()) return null
 
-        val cloneName = resolveCloneWorldName(template)
+        val cloneName = resolveCloneWorldName(template, matchId)
 
         val existing = Bukkit.getWorld(cloneName)
-        if (existing != null) {
-            activeWorldName = existing.name
-            return existing
-        }
+        if (existing != null) return existing
 
-        // Fallback if Multiverse is missing.
+        // Do not fallback to a shared template world: ceremony must be per-match.
         if (!isMultiverseAvailable()) {
-            val w = Bukkit.getWorld(template)
-            if (w != null) {
-                activeWorldName = w.name
-            }
-            return w
+            plugin.logger.warning("Ceremony requires Multiverse-Core for per-match clone, but it's missing/enabled=false")
+            return null
         }
 
-        // Best-effort world clone via Multiverse console commands.
         val console = Bukkit.getConsoleSender()
-
-        // Ensure template is loaded if possible.
         Bukkit.dispatchCommand(console, "mv load $template")
-
-        // Clone and load.
         Bukkit.dispatchCommand(console, "mv clone $template $cloneName")
         Bukkit.dispatchCommand(console, "mv load $cloneName")
 
         val created = Bukkit.getWorld(cloneName)
-        if (created != null) {
-            activeWorldName = created.name
-            return created
+        if (created != null) return created
+
+        plugin.logger.warning("Failed to create ceremony clone world '$cloneName' from template '$template'")
+        return null
+    }
+
+    private fun resolveCloneWorldName(templateWorld: String, matchId: UUID): String {
+        val tw = sanitizeWorldPart(templateWorld)
+        val sid = sanitizeWorldPart(serverId)
+        val match = matchId.toString().replace("-", "").take(8)
+
+        val raw = configuration.get(ConfigKeys.CEREMONY_CLONE_WORLD).trim()
+        val pattern = if (raw.isBlank()) "ceremony_${tw}_{server}_{match}" else raw
+
+        var name = sanitizeWorldPart(
+            pattern
+                .replace("{template}", tw)
+                .replace("{server}", sid)
+                .replace("{match}", match)
+        )
+
+        // If user provided a fixed name without {match}, keep it unique.
+        if (!raw.contains("{match}") && !name.endsWith(match)) {
+            name = "${name}_$match"
         }
 
-        // Last resort: use the template world itself.
-        val fallback = Bukkit.getWorld(template)
-        if (fallback != null) {
-            activeWorldName = fallback.name
+        // Hard limit to avoid filesystem / MV issues.
+        if (name.length > 32) {
+            val suffix = "_$match"
+            val maxPrefix = 32 - suffix.length
+            name = if (maxPrefix <= 0) {
+                "cer_$match"
+            } else {
+                name.take(maxPrefix).trimEnd('_') + suffix
+            }
         }
-        return fallback
+
+        return name
+    }
+
+    private fun sanitizeWorldPart(raw: String): String {
+        return raw.trim().replace(Regex("[^A-Za-z0-9._-]"), "_").ifBlank { "world" }
     }
 
     private fun isMultiverseAvailable(): Boolean {
@@ -266,7 +353,6 @@ object CeremonyManager {
                 val y = nums[1]
                 val z1 = nums[2]
                 val x2 = nums[3]
-                val _y2 = nums[4]
                 val z2 = nums[5]
                 PedestalRegion(min(x1, x2), max(x1, x2), min(z1, z2), max(z1, z2), y)
             }
@@ -280,7 +366,7 @@ object CeremonyManager {
                 seats.add(Location(world, x + 0.5, region.baseY + 1.0, z + 0.5, 0f, 0f))
             }
         }
-        // Prefer stable ordering; limit to 4 seats for classic 4-player teams.
+        // Stable ordering; for current rules we never need more than 4 seats.
         seats.sortWith(compareBy<Location> { it.blockX }.thenBy { it.blockZ })
         return if (seats.size > 4) seats.subList(0, 4) else seats
     }

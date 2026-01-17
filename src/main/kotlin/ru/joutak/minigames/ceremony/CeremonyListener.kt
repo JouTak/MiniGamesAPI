@@ -1,71 +1,87 @@
 package ru.joutak.minigames.ceremony
 
+import org.bukkit.Bukkit
 import org.bukkit.Location
 import org.bukkit.event.EventHandler
-import org.bukkit.event.EventPriority
 import org.bukkit.event.Listener
+import org.bukkit.event.player.PlayerChangedWorldEvent
 import org.bukkit.event.player.PlayerMoveEvent
 import org.bukkit.event.player.PlayerQuitEvent
-import org.bukkit.event.player.PlayerRespawnEvent
 import org.bukkit.event.player.PlayerTeleportEvent
+import ru.joutak.minigames.MiniGamesCore
 
 object CeremonyListener : Listener {
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    fun onMove(e: PlayerMoveEvent) {
-        val p = e.player
-        val a = CeremonyManager.getAssignment(p.uniqueId) ?: return
-        val w = p.world
-        if (w.name != a.worldName) return
-
-        val to = e.to ?: return
-        val bx = to.blockX
-        val bz = to.blockZ
-        if (a.region.containsBlock(bx, bz)) return
-
-        val from = e.from
-        // Allow looking around, block only the movement to another block.
-        val back = Location(from.world, from.x, from.y, from.z, to.yaw, to.pitch)
-        e.to = back
+    @EventHandler(ignoreCancelled = true)
+    fun onPlayerQuit(e: PlayerQuitEvent) {
+        CeremonyManager.clearAssignment(e.player.uniqueId)
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
-    fun onTeleport(e: PlayerTeleportEvent) {
-        val p = e.player
-        val a = CeremonyManager.getAssignment(p.uniqueId) ?: return
+    @EventHandler(ignoreCancelled = true)
+    fun onPlayerChangedWorld(e: PlayerChangedWorldEvent) {
+        val player = e.player
+        if (!CeremonyManager.isCeremonyWorld(player.world)) return
 
-        val fromWorld = e.from.world
-        val toWorld = e.to?.world
-
-        // Leaving ceremony world -> clear restriction.
-        if (fromWorld != null && fromWorld.name == a.worldName && toWorld != null && toWorld.name != a.worldName) {
-            CeremonyManager.clearAssignment(p.uniqueId)
-            return
+        val a = CeremonyManager.getAssignment(player.uniqueId)
+        if (a == null || a.worldName != player.world.name) {
+            ejectFromCeremony(player)
         }
+    }
 
-        // Teleporting within ceremony world outside of pedestal -> deny.
-        if (toWorld != null && toWorld.name == a.worldName) {
-            val to = e.to ?: return
-            val bx = to.blockX
-            val bz = to.blockZ
-            if (!a.region.containsBlock(bx, bz)) {
+    @EventHandler(ignoreCancelled = true)
+    fun onPlayerTeleport(e: PlayerTeleportEvent) {
+        val toWorld = e.to?.world ?: return
+        if (!CeremonyManager.isCeremonyWorld(toWorld)) return
+
+        val player = e.player
+        val a = CeremonyManager.getAssignment(player.uniqueId)
+        if (a == null || a.worldName != toWorld.name) {
+            val exit = CeremonyManager.resolveExitLocation()
+            if (exit == null) {
                 e.isCancelled = true
+            } else {
+                e.to = copy(exit, e.to)
             }
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    fun onRespawn(e: PlayerRespawnEvent) {
-        val p = e.player
-        val a = CeremonyManager.getAssignment(p.uniqueId) ?: return
-        val w = e.respawnLocation.world
-        if (w != null && w.name == a.worldName) {
-            e.respawnLocation = a.seat
+    @EventHandler(ignoreCancelled = true)
+    fun onPlayerMove(e: PlayerMoveEvent) {
+        val player = e.player
+        if (!CeremonyManager.isCeremonyWorld(player.world)) return
+
+        val a = CeremonyManager.getAssignment(player.uniqueId)
+        if (a == null || a.worldName != player.world.name) {
+            // Player is inside ceremony clone but not allowed.
+            ejectFromCeremony(player)
+            return
         }
+
+        val from = e.from
+        val to = e.to ?: return
+
+        // Allow head movement / jumping within the same block.
+        if (from.blockX == to.blockX && from.blockZ == to.blockZ) return
+
+        val region = a.region
+        val inside = to.blockX in region.minX..region.maxX && to.blockZ in region.minZ..region.maxZ
+        if (inside) return
+
+        // Push back without warnings.
+        e.to = Location(from.world, from.x, from.y, from.z, to.yaw, to.pitch)
     }
 
-    @EventHandler
-    fun onQuit(e: PlayerQuitEvent) {
-        CeremonyManager.clearAssignment(e.player.uniqueId)
+    private fun ejectFromCeremony(player: org.bukkit.entity.Player) {
+        val exit = CeremonyManager.resolveExitLocation() ?: return
+        Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
+            if (player.isOnline && CeremonyManager.isCeremonyWorld(player.world)) {
+                player.teleport(exit)
+            }
+        })
+    }
+
+    private fun copy(base: Location, yawPitchSource: Location?): Location {
+        val src = yawPitchSource ?: base
+        return Location(base.world, base.x, base.y, base.z, src.yaw, src.pitch)
     }
 }
