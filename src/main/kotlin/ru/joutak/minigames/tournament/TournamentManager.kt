@@ -2,10 +2,14 @@ package ru.joutak.minigames.tournament
 
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
+import org.bukkit.Location
+import org.bukkit.World
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
@@ -271,16 +275,21 @@ object TournamentManager {
                 // Decrement attempts for all participating teams.
                 val participating = teamKeyByTeamId.values.toSet()
                 val cacheNow = System.currentTimeMillis()
+                val becameIneligible = HashMap<String, TournamentDenyReason>()
                 for (teamKey in participating) {
                     s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts)
                     val updated = s.decrementAttempts(eventId, stage, teamKey, 1)
-
                     if (updated != null) {
                         val c = teamUiCache[teamKey]
                         if (c != null) {
                             c.attemptsLeft = updated.attemptsLeft
                             c.won = updated.won
                             c.lastFetchMs = cacheNow
+                        }
+
+
+                        if (updated.attemptsLeft <= 0) {
+                            becameIneligible[teamKey] = TournamentDenyReason.NO_ATTEMPTS
                         }
                     }
 
@@ -302,7 +311,17 @@ object TournamentManager {
                             c.won = true
                             c.lastFetchMs = System.currentTimeMillis()
                         }
+
+                        becameIneligible[winnerKey] = TournamentDenyReason.WINNER
                     }
+                }
+
+                if (becameIneligible.isNotEmpty()) {
+                    val delayTicks = configuration.get(ConfigKeys.TOURNAMENT_POST_MATCH_ENFORCE_DELAY_TICKS).toLong()
+                    val snapshot = HashMap(becameIneligible)
+                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                        enforceIneligibleTeams(snapshot)
+                    }, delayTicks)
                 }
 
                 true
@@ -630,6 +649,31 @@ object TournamentManager {
         }
     }
 
+    /**
+     * Lightweight eligibility check used by tournament matchmaking:
+     * teams with 0 attempts or already won should not be assigned to instances.
+     * Uses cached UI/progress values (no DB queries).
+     */
+    fun isTeamEligibleForQueue(teamKey: String): Boolean {
+        if (!enabled) return true
+        if (teamKey.isBlank()) return false
+
+        val c = teamUiCache[teamKey]
+        if (c == null) {
+            // Try to refresh asynchronously, but don't block matchmaking.
+            scheduleTeamUiRefresh(teamKey)
+            return true
+        }
+
+        if (c.won == true) return false
+        val attempts = c.attemptsLeft
+        if (attempts != null && attempts <= 0) return false
+
+        // Opportunistically refresh stale cache.
+        scheduleTeamUiRefresh(teamKey)
+        return true
+    }
+
     fun isTeamForceReady(teamKey: String): Boolean {
         if (!enabled) return false
         val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
@@ -729,6 +773,100 @@ object TournamentManager {
             TournamentDenyReason.NOT_QUALIFIED -> "messages.tournament.not_qualified"
             TournamentDenyReason.ERROR, null -> "messages.tournament.error"
         }
+    }
+
+   
+    private fun enforceIneligibleTeams(ineligibleByTeam: Map<String, TournamentDenyReason>) {
+        if (!enabled) return
+        if (ineligibleByTeam.isEmpty()) return
+
+        val bypassPerm = configuration.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
+        val ceremonyAnyEnabled = configuration.get(ConfigKeys.CEREMONY_ENABLED) || configuration.get(ConfigKeys.TOURNAMENT_CEREMONY_ENABLED)
+        val kickAfterSeconds = configuration.get(ConfigKeys.TOURNAMENT_CEREMONY_KICK_AFTER_SECONDS)
+
+        for (player in Bukkit.getOnlinePlayers()) {
+            if (!player.isOnline) continue
+            if (isBypassUuid(player.uniqueId) || (bypassPerm.isNotBlank() && player.hasPermission(bypassPerm))) continue
+
+            val teamKey = getCachedTeamKey(player.uniqueId) ?: continue
+            val reason = ineligibleByTeam[teamKey] ?: continue
+
+            // Remove from matchmaking/queue to prevent further games.
+            MatchmakingManager.removePlayer(player)
+
+            if (ceremonyAnyEnabled) {
+                if (kickAfterSeconds > 0) {
+                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                        if (!player.isOnline) return@Runnable
+                        val tk = getCachedTeamKey(player.uniqueId)
+                        if (tk != null && ineligibleByTeam.containsKey(tk)) {
+                            player.kick(denyKickMessageComponent(reason))
+                        }
+                    }, (kickAfterSeconds * 20L).coerceAtLeast(1L))
+                }
+                continue
+            }
+
+            // No ceremony configured: kick immediately.
+            player.kick(denyKickMessageComponent(reason))
+        }
+    }
+
+    private fun parseCeremonySeats(world: World, raw: List<String>): List<Location> {
+        if (raw.isEmpty()) return emptyList()
+        val out = ArrayList<Location>(raw.size)
+        for (s in raw) {
+            val loc = parseLocationString(world, s)
+            if (loc != null) out.add(loc)
+        }
+        return out
+    }
+
+    private fun parseCeremonyFallback(world: World, raw: String): Location? {
+        val loc = parseLocationString(world, raw)
+        return loc ?: world.spawnLocation
+    }
+
+    private fun parseLocationString(world: World, raw: String?): Location? {
+        val r = raw?.trim().orEmpty()
+        if (r.isEmpty()) return null
+
+        val parts = r.replace(',', ' ').split(Regex("\\s+")).filter { it.isNotBlank() }
+        if (parts.size < 3) return null
+
+        return try {
+            val x = parts[0].toDouble()
+            val y = parts[1].toDouble()
+            val z = parts[2].toDouble()
+            val yaw = parts.getOrNull(3)?.toFloatOrNull() ?: 0f
+            val pitch = parts.getOrNull(4)?.toFloatOrNull() ?: 0f
+            Location(world, x, y, z, yaw, pitch)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    private fun selectCeremonySeat(
+        player: Player,
+        world: World,
+        seats: List<Location>,
+        fallback: Location?,
+        usedSeatIndices: MutableSet<Int>,
+    ): Location? {
+        if (seats.isEmpty()) {
+            return fallback ?: world.spawnLocation
+        }
+
+        val key = "${getCachedTeamKey(player.uniqueId)}|${player.uniqueId}"
+        var idx = (key.hashCode() and Int.MAX_VALUE) % seats.size
+        for (i in 0 until seats.size) {
+            val tryIdx = (idx + i) % seats.size
+            if (usedSeatIndices.add(tryIdx)) {
+                return seats[tryIdx]
+            }
+        }
+
+        return fallback ?: seats[0]
     }
 
     private fun parseBypassUuids(list: List<String>): Set<UUID> {

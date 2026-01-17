@@ -2,6 +2,7 @@ package ru.joutak.minigames
 
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
+import ru.joutak.minigames.ceremony.CeremonyManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
@@ -33,6 +34,7 @@ object MiniGamesAPI {
     fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
         // Tournament progress must update even if results storage is disabled.
         TournamentManager.applyMatchResult(result)
+        CeremonyManager.handleMatchEnded(result)
         return ResultsManager.recordMatch(result)
     }
 
