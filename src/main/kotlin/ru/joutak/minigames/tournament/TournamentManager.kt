@@ -222,16 +222,23 @@ object TournamentManager {
                         continue
                     }
 
+                    val cachedPreLogin = preLoginTeamKeyCache[p.playerUuid]
+                    if (!cachedPreLogin.isNullOrBlank()) {
+                        teamKeyByTeamId[teamId] = cachedPreLogin
+                        continue
+                    }
+
                     val name = p.playerName?.trim().orEmpty()
-                    if (name.isNotBlank()) {
-                        val resolved = try {
-                            s.findTeamKey(eventId, p.playerUuid, name)
-                        } catch (_: Throwable) {
-                            null
-                        }
-                        if (!resolved.isNullOrBlank()) {
-                            teamKeyByTeamId[teamId] = resolved
-                        }
+                    // Important: even if playerName is missing in results, UUID is usually already bound
+                    // in tournament_team_member by the tournament gate (pre-login). That prevents attempts
+                    // abuse by disconnecting all players before results are recorded.
+                    val resolved = try {
+                        s.findTeamKey(eventId, p.playerUuid, name)
+                    } catch (_: Throwable) {
+                        null
+                    }
+                    if (!resolved.isNullOrBlank()) {
+                        teamKeyByTeamId[teamId] = resolved
                     }
                 }
 
