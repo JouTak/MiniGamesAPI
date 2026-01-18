@@ -19,34 +19,50 @@ object PlayerJoinListener : Listener {
         Bukkit.getScheduler().runTaskLater(MiniGamesCore.plugin, Runnable {
             if (!player.isOnline) return@Runnable
 
-            // Tournament gate for non-strict mode (strict mode handled in AsyncPlayerPreLoginEvent).
-            if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED) &&
-                !MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_PRELOGIN_STRICT)
-            ) {
-                // Permission bypass works only after join.
-                val bypassPerm = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
-                val bypass = player.hasPermission(bypassPerm)
+            val tournamentEnabled = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
+            val strictPrelogin = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_PRELOGIN_STRICT)
+            val bypassPerm = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION).trim()
+            val hasBypassPerm = bypassPerm.isNotBlank() && player.hasPermission(bypassPerm)
+            val bypassUuid = TournamentManager.isBypassUuid(player.uniqueId)
 
-                if (!bypass) {
-                    val gate = TournamentManager.checkAccess(player.uniqueId, player.name)
-                    if (!gate.allowed) {
+            // IMPORTANT: in strict pre-login mode, permission bypass should NOT exclude a real participant
+            // from matchmaking, because OP/admin accounts typically have all permissions.
+            // Only bypass UUID list works in strict mode.
+            var treatAsBypass = bypassUuid
+
+            // Tournament gate for non-strict mode (strict mode handled in AsyncPlayerPreLoginEvent).
+            if (tournamentEnabled && !strictPrelogin && !treatAsBypass) {
+                // Permission bypass works only after join.
+                // If player has bypass permission, we still TRY to treat them as a participant if they are in roster.
+                val gate = TournamentManager.checkAccess(player.uniqueId, player.name)
+                if (!gate.allowed) {
+                    if (!hasBypassPerm) {
                         player.kick(TournamentManager.denyKickMessageComponent(gate.denyReason))
                         return@Runnable
                     }
-
+                    // Admin bypass: allow joining server, but keep them out of tournament matchmaking.
+                    treatAsBypass = true
+                } else {
                     gate.teamKey?.let { TournamentManager.rememberPreLoginTeamKey(player.uniqueId, it) }
                 }
             }
 
             // Tournament team cap (prevents overfilling a single team on the server).
-            if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
-                val bypassPerm = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
-                val bypass = player.hasPermission(bypassPerm) || TournamentManager.isBypassUuid(player.uniqueId)
+            if (tournamentEnabled) {
+                // In strict mode, permission bypass does not apply (see comment above).
+                if (!strictPrelogin && hasBypassPerm) {
+                    // If player is NOT a valid participant (no cached teamKey), keep bypass.
+                    // If they are a participant, treatAsBypass stays false (gate above cached teamKey).
+                    if (TournamentManager.consumePreLoginTeamKey(player.uniqueId) == null &&
+                        TournamentManager.resolveTeamKey(player.uniqueId, player.name).isNullOrBlank()
+                    ) {
+                        treatAsBypass = true
+                    }
+                }
 
-                if (!bypass) {
-                    val strict = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_PRELOGIN_STRICT)
+                if (!treatAsBypass) {
                     var markedOnlineByFinalize = false
-                    val teamKey = if (strict) {
+                    val teamKey = if (strictPrelogin) {
                         // Strict mode: pre-login should have reserved a slot already.
                         TournamentManager.finalizeJoinFromPending(player.uniqueId)?.also {
                             markedOnlineByFinalize = true

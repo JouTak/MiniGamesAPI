@@ -301,7 +301,9 @@ object MatchmakingManager {
 
         val byTeam = linkedMapOf<String, MutableList<Player>>()
         for (p in lobbyPlayers) {
-            if (TournamentManager.isBypassUuid(p.uniqueId) || p.hasPermission("minigames.tournament.bypass")) continue
+            // IMPORTANT: do not exclude OP/admin participants from tournament matchmaking.
+            // Bypass is controlled only via explicit UUID list (strict mode-safe).
+            if (TournamentManager.isBypassUuid(p.uniqueId)) continue
 
             val teamKey = TournamentManager.getCachedTeamKey(p.uniqueId) ?: continue
             if (lockedTeamKeys.contains(teamKey)) continue
