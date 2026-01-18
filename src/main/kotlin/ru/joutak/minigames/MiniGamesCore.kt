@@ -20,15 +20,8 @@ import ru.joutak.minigames.listener.AsyncPlayerPreLoginListener
 import ru.joutak.minigames.listener.LobbyItemsListener
 import ru.joutak.minigames.listener.PlayerJoinListener
 import ru.joutak.minigames.listener.PlayerQuitListener
-import ru.joutak.minigames.listener.WhitelistChangeListener
-import ru.joutak.minigames.listener.WhitelistReloadListener
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.results.ResultsManager
-import ru.joutak.minigames.spartakiad.SpartakiadManager
-import ru.joutak.minigames.spartakiad.participant.storage.SqliteParticipantStorage
-import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
-import ru.joutak.minigames.spartakiad.whitelist.storage.YamlTeamlistStorage
-import ru.joutak.minigames.spartakiad.whitelist.storage.YamlWhitelistStorage
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
@@ -46,7 +39,6 @@ object MiniGamesCore {
     lateinit var configuration: Config
         private set
 
-    lateinit var spartakiadManager: SpartakiadManager
 
     lateinit var plugin: JavaPlugin
 
@@ -99,7 +91,6 @@ object MiniGamesCore {
         // Ceremony is implemented by each mode during its own ENDING/CLEANUP.
 
         loadDependencies()
-        initSpartakiadManager()
         registerEvents()
         registerCommands()
 
@@ -356,7 +347,7 @@ object MiniGamesCore {
                     yaml.contains("matchmaking") ||
                     yaml.contains("lobby") ||
                     yaml.contains("teamselect") ||
-                    yaml.contains("spartakiad")
+                    yaml.contains("tournament")
 
             // Very common minigame keys (Splatoon-style configs).
             val looksLikeMinigame =
@@ -468,55 +459,8 @@ object MiniGamesCore {
         }
     }
 
-    private fun initSpartakiadManager() {
-        val minigameName = configuration.get(ConfigKeys.MODE_NAME)
-
-        val gamePath = apiDataPath.resolve(minigameName)
-        gamePath.toFile().mkdirs()
-
-        val whitelistPath = apiDataPath.resolve("whitelist.yml")
-        if (!whitelistPath.exists()) {
-            try {
-                YamlConfiguration().save(whitelistPath.toFile())
-            } catch (_: Throwable) {
-            }
-        }
-
-        val teamMode = configuration.get(ConfigKeys.SPARTAKIAD_TEAM_MODE)
-
-        val whitelistStorage: WhitelistStorage =
-            if (teamMode) {
-                YamlTeamlistStorage(whitelistPath.toFile())
-            } else {
-                YamlWhitelistStorage(whitelistPath.toFile())
-            }
-
-        val usingLibreLogin = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
-
-        val uuidResolver: UuidResolver =
-            if (usingLibreLogin && libreLogin != null) {
-                tryCreateLibreLoginUuidResolver(libreLogin!!)
-                    ?: BukkitUuidResolver()
-            } else {
-                BukkitUuidResolver()
-            }
-
-        val dbFile = gamePath.resolve("participants.db").toFile()
-        val participantStorage = SqliteParticipantStorage(dbFile)
-
-        spartakiadManager =
-            SpartakiadManager(
-                gamePath,
-                participantStorage,
-                whitelistStorage,
-                uuidResolver
-            )
-    }
-
     private fun registerEvents() {
         Bukkit.getPluginManager().registerEvents(AsyncPlayerPreLoginListener, plugin)
-        Bukkit.getPluginManager().registerEvents(WhitelistChangeListener, plugin)
-        Bukkit.getPluginManager().registerEvents(WhitelistReloadListener, plugin)
 
         Bukkit.getPluginManager().registerEvents(LobbyItemsListener, plugin)
         Bukkit.getPluginManager().registerEvents(TeamSelectionGui, plugin)
@@ -559,11 +503,6 @@ object MiniGamesCore {
         } catch (_: Throwable) {
         }
 
-        try {
-            spartakiadManager.close()
-        } catch (_: Throwable) {
-        }
-
         ResultsManager.shutdown()
     }
 
@@ -586,15 +525,11 @@ storage:
   debounce_millis: 500
   close_timeout_millis: 5000
 
-spartakiad:
-  enabled: false
-  attempts: 5
-  team_mode: false
 
 tournament:
   enabled: false
   max_online_per_team: 4
-  event_id: "spartakiad"
+  event_id: "tournament"
   stage: "round1"
   previous_stage: ""
   default_attempts: 1

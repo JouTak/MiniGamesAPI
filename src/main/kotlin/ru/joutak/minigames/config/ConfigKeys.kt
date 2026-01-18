@@ -15,22 +15,18 @@ object ConfigKeys {
      */
     val MODE_DISPLAY_NAME = object : ConfigKey<String>("mode.display_name", "MINIGAME") {}
 
-    val SPARTAKIAD_ENABLED = object : ConfigKey<Boolean>("spartakiad.enabled", false) {}
-    val SPARTAKIAD_MINIGAME_NAME = object : ConfigKey<String>("spartakiad.minigame_name", "minigame".lowercase()) {}
-    val SPARTAKIAD_ATTEMPTS = object : ConfigKey<Int>("spartakiad.attempts", 5) {}
-    val SPARTAKIAD_TEAM_MODE = object : ConfigKey<Boolean>("spartakiad.team_mode", false) {}
 
     /**
-     * Tournament mode (new name for legacy "spartakiad" mode).
+     * Tournament mode.
      * When enabled, access/queue/team selection is controlled by TournamentManager.
      */
     val TOURNAMENT_ENABLED = object : ConfigKey<Boolean>("tournament.enabled", false) {}
 
     /**
      * Tournament id (shared across all modes/stages).
-     * Example: "spartakiad_2026".
+     * Example: "season3".
      */
-    val TOURNAMENT_EVENT_ID = object : ConfigKey<String>("tournament.event_id", "spartakiad") {}
+    val TOURNAMENT_EVENT_ID = object : ConfigKey<String>("tournament.event_id", "tournament") {}
 
     /**
      * Current tournament stage on this server.

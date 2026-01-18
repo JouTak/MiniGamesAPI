@@ -19,22 +19,14 @@ storage:
   # Таймаут graceful-shutdown для фонового writer thread (мс)
   close_timeout_millis: 5000
 
-spartakiad:
-  # Включить спартакиадку (whitelist + attempts + победители)
-  enabled: false
-  # Количество попыток по умолчанию
-  attempts: 5
-  # team_mode=true: whitelist.yml трактуется как команды (teamlist), иначе как список ников
-  team_mode: false
 
 tournament:
-  # Новый режим турнира (замена легаси "spartakiad").
-  # Включение этого режима постепенно будет вытеснять spartakiad.*.
+  # Режим турнира.
   enabled: false
 
   # Идентификатор турнира (общий для всех режимов/стадий).
-  # Пример: "spartakiad_2026"
-  event_id: "spartakiad"
+  # Пример: "season3"
+  event_id: "tournament"
 
   # Текущая стадия на этом сервере.
   # Примеры: "round1", "round2", "round3".
