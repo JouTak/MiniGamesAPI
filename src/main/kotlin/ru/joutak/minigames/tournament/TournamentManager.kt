@@ -9,6 +9,7 @@ import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.ResultsConfig
+import ru.joutak.minigames.tournament.advance.TournamentAdvanceManager
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
 import ru.joutak.minigames.tournament.model.TournamentGateResult
 import ru.joutak.minigames.tournament.model.TournamentTeamCaptain
@@ -734,6 +735,11 @@ object TournamentManager {
                 }
             }
 
+            val advanceAllowed = TournamentAdvanceManager.isTeamAllowed(plugin, eventId, stage, teamKey)
+            if (advanceAllowed == false) {
+                return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.NOT_QUALIFIED)
+            }
+
             val progress = s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts)
 
             if (progress.won) {
@@ -778,6 +784,8 @@ object TournamentManager {
         if (ineligibleByTeam.isEmpty()) return
 
         val bypassPerm = configuration.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
+        val kickEnabled = configuration.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_PARTICIPANTS)
+        val kickDelayTicks = configuration.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_DELAY_TICKS).toLong().coerceAtLeast(0L)
 
         for (player in Bukkit.getOnlinePlayers()) {
             if (!player.isOnline) continue
@@ -789,8 +797,19 @@ object TournamentManager {
             // Remove from matchmaking/queue to prevent further games.
             MatchmakingManager.removePlayer(player)
 
-            // Tournament mode: if team became ineligible, kick to force re-check on next join.
-            player.kick(denyKickMessageComponent(reason))
+            if (!kickEnabled) continue
+
+            if (kickDelayTicks > 0) {
+                Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+                    if (!player.isOnline) return@Runnable
+                    val tk = getCachedTeamKey(player.uniqueId)
+                    if (tk != null && ineligibleByTeam.containsKey(tk)) {
+                        player.kick(denyKickMessageComponent(reason))
+                    }
+                }, kickDelayTicks)
+            } else {
+                player.kick(denyKickMessageComponent(reason))
+            }
         }
     }
 

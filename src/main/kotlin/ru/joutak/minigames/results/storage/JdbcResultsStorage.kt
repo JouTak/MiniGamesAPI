@@ -1,6 +1,9 @@
 package ru.joutak.minigames.results.storage
 
 import ru.joutak.minigames.results.model.MatchResult
+import ru.joutak.minigames.results.model.MatchTeamsSnapshot
+import ru.joutak.minigames.results.model.Metric
+import ru.joutak.minigames.results.model.TeamMetricsSnapshot
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
 import java.sql.Connection
 import java.sql.DriverManager
@@ -367,6 +370,145 @@ class JdbcResultsStorage(
 
         return resultList
     }
+
+    override fun loadMatchTeamsWithMetrics(
+        eventId: String,
+        stage: String,
+        endedAtMaxInclusive: Long?,
+        limit: Int,
+        offset: Int,
+    ): List<MatchTeamsSnapshot> {
+        val safeLimit = limit.coerceIn(1, 2000)
+        val safeOffset = offset.coerceAtLeast(0)
+
+        openConnection().use { conn ->
+            val matchIds = ArrayList<UUID>()
+            val endedById = HashMap<UUID, Long>()
+
+            val sql = buildString {
+                append("SELECT match_id, ended_at_ms FROM matches WHERE event_id = ? AND stage = ?")
+                if (endedAtMaxInclusive != null) append(" AND ended_at_ms <= ?")
+                append(" ORDER BY ended_at_ms ASC, match_id ASC LIMIT ? OFFSET ?")
+            }
+
+            conn.prepareStatement(sql).use { ps ->
+                var idx = 1
+                ps.setString(idx++, eventId)
+                ps.setString(idx++, stage)
+                if (endedAtMaxInclusive != null) {
+                    ps.setLong(idx++, endedAtMaxInclusive)
+                }
+                ps.setInt(idx++, safeLimit)
+                ps.setInt(idx, safeOffset)
+
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        val id = UUID.fromString(rs.getString(1))
+                        val ended = rs.getLong(2)
+                        matchIds.add(id)
+                        endedById[id] = ended
+                    }
+                }
+            }
+
+            if (matchIds.isEmpty()) return emptyList()
+
+            val placeholders = matchIds.joinToString(",") { "?" }
+            val teamsByMatch = HashMap<UUID, LinkedHashMap<Int, TeamAcc>>(matchIds.size)
+            for (id in matchIds) {
+                teamsByMatch[id] = LinkedHashMap()
+            }
+
+            val sqlTeams = ("""
+                SELECT mt.match_id, mt.team_id, mt.placement, mt.is_winner, mt.score,
+                       tm.metric_key, tm.value_int, tm.value_real, tm.value_text
+                FROM match_teams mt
+                LEFT JOIN team_metrics tm ON tm.match_id = mt.match_id AND tm.team_id = mt.team_id
+                WHERE mt.match_id IN (""" + placeholders + """)
+                ORDER BY mt.match_id ASC, mt.team_id ASC, tm.metric_key ASC
+            """).trimIndent()
+
+            conn.prepareStatement(sqlTeams).use { ps ->
+                var idx = 1
+                for (id in matchIds) {
+                    ps.setString(idx++, id.toString())
+                }
+                ps.executeQuery().use { rs ->
+                    while (rs.next()) {
+                        val matchId = UUID.fromString(rs.getString(1))
+                        val teamId = rs.getInt(2)
+
+                        val teamMap = teamsByMatch[matchId] ?: continue
+                        val acc = teamMap.getOrPut(teamId) { TeamAcc(teamId) }
+
+                        val placementObj = rs.getObject(3)
+                        if (placementObj != null) {
+                            acc.placement = (placementObj as Number).toInt()
+                        }
+
+                        acc.isWinner = rs.getBoolean(4)
+
+                        val scoreObj = rs.getObject(5)
+                        if (scoreObj != null) {
+                            acc.score = (scoreObj as Number).toDouble()
+                        }
+
+                        val metricKey = rs.getString(6)
+                        if (metricKey != null) {
+                            val vIntObj = rs.getObject(7)
+                            val vRealObj = rs.getObject(8)
+                            val vText = rs.getString(9)
+                            acc.metrics.add(
+                                Metric(
+                                    key = metricKey,
+                                    valueInt = (vIntObj as? Number)?.toLong(),
+                                    valueReal = (vRealObj as? Number)?.toDouble(),
+                                    valueText = vText,
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+            val out = ArrayList<MatchTeamsSnapshot>(matchIds.size)
+            for (id in matchIds) {
+                val ended = endedById[id] ?: continue
+                val teamMap = teamsByMatch[id] ?: continue
+                val teams = teamMap.values.map { acc ->
+                    TeamMetricsSnapshot(
+                        teamId = acc.teamId,
+                        placement = acc.placement,
+                        isWinner = acc.isWinner,
+                        score = acc.score,
+                        metrics = acc.metrics.toList(),
+                    )
+                }
+                out.add(MatchTeamsSnapshot(id, ended, teams))
+            }
+
+            return out
+        }
+    }
+
+    override fun getMatchEndedAtMs(matchId: UUID): Long? {
+        openConnection().use { conn ->
+            conn.prepareStatement("SELECT ended_at_ms FROM matches WHERE match_id = ? LIMIT 1").use { ps ->
+                ps.setString(1, matchId.toString())
+                ps.executeQuery().use { rs ->
+                    return if (rs.next()) rs.getLong(1) else null
+                }
+            }
+        }
+    }
+
+    private data class TeamAcc(
+        val teamId: Int,
+        var placement: Int? = null,
+        var isWinner: Boolean = false,
+        var score: Double? = null,
+        val metrics: MutableList<Metric> = mutableListOf(),
+    )
 
     override fun close() {
         // no-op: we open a new connection per operation

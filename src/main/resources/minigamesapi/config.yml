@@ -47,19 +47,6 @@ tournament:
   # Если false, часть проверок может выполняться на join (когда доступна связь nickname->uuid).
   prelogin:
     strict: true
-
-  post_match:
-    # Задержка в тиках перед применением ограничений к командам, которые после матча стали недоступны (0 попыток или победа).
-    # Нужна, чтобы режим успел завершить ENDING/CLEANUP.
-    enforce_delay_ticks: 40
-
-    # Если true, участников матча кикает после записи результата в режиме турнира.
-    # Моды должны сами показывать церемонию/финал и вызывать MiniGamesAPI.recordMatchResult(...) в самом конце.
-    kick_participants: true
-
-    # Задержка (тики) перед киком участников после того, как TournamentManager записал прогресс.
-    kick_delay_ticks: 0
-
   bypass:
     # Пермишен для bypass внутри сервера (join/checks). На prelogin его нет.
     permission: "minigamesapi.tournament.bypass"

@@ -2,6 +2,7 @@ package ru.joutak.minigames.results
 
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.results.model.MatchResult
+import ru.joutak.minigames.results.model.MatchTeamsSnapshot
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
 import ru.joutak.minigames.results.storage.JdbcResultsStorage
 import ru.joutak.minigames.results.storage.ResultsStorage
@@ -220,6 +221,42 @@ private fun driverInstallHint(url: String): String {
                 plugin.logger.severe("Failed to query top metric: ${t.message}")
                 plugin.logger.severe(t.stackTraceToString())
                 emptyList()
+            }
+        }, executor)
+    }
+
+    fun loadMatchTeamsWithMetrics(
+        eventId: String,
+        stage: String,
+        endedAtMaxInclusive: Long? = null,
+        limit: Int = 500,
+        offset: Int = 0,
+    ): CompletableFuture<List<MatchTeamsSnapshot>> {
+        if (!enabled) return CompletableFuture.completedFuture(emptyList())
+        val s = storage ?: return CompletableFuture.completedFuture(emptyList())
+
+        return CompletableFuture.supplyAsync({
+            try {
+                s.loadMatchTeamsWithMetrics(eventId, stage, endedAtMaxInclusive, limit, offset)
+            } catch (t: Throwable) {
+                plugin.logger.severe("Failed to load matches for qualifier: ${t.message}")
+                plugin.logger.severe(t.stackTraceToString())
+                emptyList()
+            }
+        }, executor)
+    }
+
+    fun getMatchEndedAtMs(matchId: UUID): CompletableFuture<Long?> {
+        if (!enabled) return CompletableFuture.completedFuture(null)
+        val s = storage ?: return CompletableFuture.completedFuture(null)
+
+        return CompletableFuture.supplyAsync({
+            try {
+                s.getMatchEndedAtMs(matchId)
+            } catch (t: Throwable) {
+                plugin.logger.severe("Failed to query match ended_at_ms: ${t.message}")
+                plugin.logger.severe(t.stackTraceToString())
+                null
             }
         }, executor)
     }

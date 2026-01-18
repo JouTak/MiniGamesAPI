@@ -10,6 +10,7 @@ import ru.joutak.minigames.command.mg.MiniGamesCommand
 import ru.joutak.minigames.command.mg.StartCommand
 import ru.joutak.minigames.command.ready.ReadyCommand
 import ru.joutak.minigames.command.teamselect.TeamSelectCommand
+import ru.joutak.minigames.command.tournament.TournamentCommand
 import ru.joutak.minigames.command.unready.UnreadyCommand
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
@@ -22,6 +23,7 @@ import ru.joutak.minigames.listener.PlayerJoinListener
 import ru.joutak.minigames.listener.PlayerQuitListener
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.results.ResultsManager
+import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import ru.joutak.minigames.util.uuid.BukkitUuidResolver
 import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
 import ru.joutak.minigames.util.uuid.UuidResolver
@@ -68,6 +70,10 @@ object MiniGamesCore {
     val apiMessagesFile: File
         get() = apiDataPath.resolve("messages.yml").toFile()
 
+    /** Tournament qualifier config file: plugins/<HostPlugin>/minigamesapi/tournament_qualifier.yml */
+    val apiTournamentQualifierFile: File
+        get() = apiDataPath.resolve("tournament_qualifier.yml").toFile()
+
     fun initialize(plugin: JavaPlugin) {
         if (initialized) {
             plugin.logger.info("MiniGamesCore уже инициализирован, пропускаю повторный initialize().")
@@ -88,6 +94,7 @@ object MiniGamesCore {
         initResultsManager()
 
         initTournamentManager()
+        initTournamentQualifierManager()
         // Ceremony is implemented by each mode during its own ENDING/CLEANUP.
 
         loadDependencies()
@@ -380,6 +387,7 @@ object MiniGamesCore {
             "minigamesapi/config.yml" -> DEFAULT_API_CONFIG
             "minigamesapi/results.yml" -> DEFAULT_RESULTS_CONFIG
             "minigamesapi/messages.yml" -> DEFAULT_MESSAGES_CONFIG
+            "minigamesapi/tournament_qualifier.yml" -> DEFAULT_TOURNAMENT_QUALIFIER_CONFIG
             else -> ""
         }
 
@@ -413,6 +421,25 @@ object MiniGamesCore {
             )
         } catch (t: Throwable) {
             plugin.logger.severe("Failed to initialize TournamentManager: ${t.message}")
+            plugin.logger.severe(t.stackTraceToString())
+        }
+    }
+
+    private fun initTournamentQualifierManager() {
+        try {
+            if (!apiTournamentQualifierFile.exists()) {
+                saveClasspathResourceOrDefault(
+                    "minigamesapi/tournament_qualifier.yml",
+                    apiTournamentQualifierFile.toPath(),
+                )
+            }
+
+            TournamentQualifierManager.initialize(
+                plugin = plugin,
+                file = apiTournamentQualifierFile,
+            )
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to initialize TournamentQualifierManager: ${t.message}")
             plugin.logger.severe(t.stackTraceToString())
         }
     }
@@ -477,6 +504,7 @@ object MiniGamesCore {
         val mgCmd = MiniGamesCommand.getBuilder().then(StartCommand.getBuilder()).build()
         val forceRunCmd = ForceRunCommand.getBuilder().build()
         val forceReadyCmd = ForceReadyCommand.getBuilder().build()
+        val tournamentCmd = TournamentCommand.getBuilder().build()
 
         plugin.lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(readyCmd)
@@ -485,6 +513,7 @@ object MiniGamesCore {
             event.registrar().register(mgCmd)
             event.registrar().register(forceRunCmd)
             event.registrar().register(forceReadyCmd)
+            event.registrar().register(tournamentCmd)
         }
     }
 
@@ -694,6 +723,38 @@ ui:
         lore:
           - "&7Вернуться в лобби"
         deny_message: "&cКоманда недоступна.""""
+
+    private const val DEFAULT_TOURNAMENT_QUALIFIER_CONFIG: String = """
+event_id: "spartakiad_2026"
+stage: "qualifier_splatoon"
+
+min_matches: 3
+
+elo:
+  start_rating: 1000
+  k_placement:
+    provisional_matches: 10
+    k_provisional: 24
+    k_stable: 16
+  scale: 400
+
+data:
+  paint_percent_key: "paint_percent"
+  allow_fallback_to_score: false
+  paint_percent_format: "0_100" # 0_100 | 0_1
+
+locking:
+  mode: "timestamp"   # timestamp | match_id
+  locked: false
+  locked_at: 0
+  locked_match_id: ""
+
+advance:
+  default_thresholds:
+    - { min_teams: 16, take: 16 }
+    - { min_teams: 8,  take: 8  }
+    - { min_teams: 0,  take: 0  } # 0 = take all
+"""
 
     private const val DEFAULT_RESULTS_CONFIG: String = """
 results:
