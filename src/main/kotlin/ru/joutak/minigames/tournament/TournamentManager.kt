@@ -2,9 +2,6 @@ package ru.joutak.minigames.tournament
 
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
-import org.bukkit.Location
-import org.bukkit.World
-import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
@@ -781,8 +778,6 @@ object TournamentManager {
         if (ineligibleByTeam.isEmpty()) return
 
         val bypassPerm = configuration.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
-        val ceremonyAnyEnabled = configuration.get(ConfigKeys.CEREMONY_ENABLED) || configuration.get(ConfigKeys.TOURNAMENT_CEREMONY_ENABLED)
-        val kickAfterSeconds = configuration.get(ConfigKeys.TOURNAMENT_CEREMONY_KICK_AFTER_SECONDS)
 
         for (player in Bukkit.getOnlinePlayers()) {
             if (!player.isOnline) continue
@@ -794,79 +789,9 @@ object TournamentManager {
             // Remove from matchmaking/queue to prevent further games.
             MatchmakingManager.removePlayer(player)
 
-            if (ceremonyAnyEnabled) {
-                if (kickAfterSeconds > 0) {
-                    Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                        if (!player.isOnline) return@Runnable
-                        val tk = getCachedTeamKey(player.uniqueId)
-                        if (tk != null && ineligibleByTeam.containsKey(tk)) {
-                            player.kick(denyKickMessageComponent(reason))
-                        }
-                    }, (kickAfterSeconds * 20L).coerceAtLeast(1L))
-                }
-                continue
-            }
-
-            // No ceremony configured: kick immediately.
+            // Tournament mode: if team became ineligible, kick to force re-check on next join.
             player.kick(denyKickMessageComponent(reason))
         }
-    }
-
-    private fun parseCeremonySeats(world: World, raw: List<String>): List<Location> {
-        if (raw.isEmpty()) return emptyList()
-        val out = ArrayList<Location>(raw.size)
-        for (s in raw) {
-            val loc = parseLocationString(world, s)
-            if (loc != null) out.add(loc)
-        }
-        return out
-    }
-
-    private fun parseCeremonyFallback(world: World, raw: String): Location? {
-        val loc = parseLocationString(world, raw)
-        return loc ?: world.spawnLocation
-    }
-
-    private fun parseLocationString(world: World, raw: String?): Location? {
-        val r = raw?.trim().orEmpty()
-        if (r.isEmpty()) return null
-
-        val parts = r.replace(',', ' ').split(Regex("\\s+")).filter { it.isNotBlank() }
-        if (parts.size < 3) return null
-
-        return try {
-            val x = parts[0].toDouble()
-            val y = parts[1].toDouble()
-            val z = parts[2].toDouble()
-            val yaw = parts.getOrNull(3)?.toFloatOrNull() ?: 0f
-            val pitch = parts.getOrNull(4)?.toFloatOrNull() ?: 0f
-            Location(world, x, y, z, yaw, pitch)
-        } catch (_: Throwable) {
-            null
-        }
-    }
-
-    private fun selectCeremonySeat(
-        player: Player,
-        world: World,
-        seats: List<Location>,
-        fallback: Location?,
-        usedSeatIndices: MutableSet<Int>,
-    ): Location? {
-        if (seats.isEmpty()) {
-            return fallback ?: world.spawnLocation
-        }
-
-        val key = "${getCachedTeamKey(player.uniqueId)}|${player.uniqueId}"
-        var idx = (key.hashCode() and Int.MAX_VALUE) % seats.size
-        for (i in 0 until seats.size) {
-            val tryIdx = (idx + i) % seats.size
-            if (usedSeatIndices.add(tryIdx)) {
-                return seats[tryIdx]
-            }
-        }
-
-        return fallback ?: seats[0]
     }
 
     private fun parseBypassUuids(list: List<String>): Set<UUID> {

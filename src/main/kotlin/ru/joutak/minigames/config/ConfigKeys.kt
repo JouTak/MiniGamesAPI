@@ -92,76 +92,22 @@ object ConfigKeys {
     }
 
     /**
-     * Optional ceremony map for teams that ran out of attempts or already won.
-     * If enabled, players are moved there instead of being kicked.
+     * If true, match participants are kicked after a recorded match in tournament mode.
+     *
+     * Rationale: modes handle their own post-game ceremony and then call MiniGamesAPI.recordMatchResult(...)
+     * at the very end. After progress is persisted, API kicks participants so the tournament gate is
+     * re-applied on the next join.
      */
-    val TOURNAMENT_CEREMONY_ENABLED = object : ConfigKey<Boolean>("tournament.ceremony.enabled", false) {}
-
-    val TOURNAMENT_CEREMONY_WORLD = object : ConfigKey<String>("tournament.ceremony.world", "tourney_ceremony") {}
-
-    /**
-     * Seat locations in ceremony world: strings like "x y z yaw pitch" (yaw/pitch optional).
-     */
-    val TOURNAMENT_CEREMONY_SEATS = object : ConfigKey<List<String>>("tournament.ceremony.seats", emptyList()) {}
+    val TOURNAMENT_POST_MATCH_KICK_PARTICIPANTS = object : ConfigKey<Boolean>("tournament.post_match.kick_participants", true) {}
 
     /**
-     * Fallback location in ceremony world when no seats are configured or parsing failed.
+     * Delay (ticks) before kicking match participants after TournamentManager persisted match progress.
      */
-    val TOURNAMENT_CEREMONY_FALLBACK = object : ConfigKey<String>("tournament.ceremony.fallback", "0 64 0 0 0") {}
-
-    /**
-     * If > 0, players moved to ceremony are kicked after this many seconds. 0 = do not kick.
-     */
-    val TOURNAMENT_CEREMONY_KICK_AFTER_SECONDS = object : ConfigKey<Int>("tournament.ceremony.kick_after_seconds", 0) {
+    val TOURNAMENT_POST_MATCH_KICK_DELAY_TICKS = object : ConfigKey<Int>("tournament.post_match.kick_delay_ticks", 0) {
         override fun validate(value: Int) {
-            require(value >= 0) { "tournament.ceremony.kick_after_seconds must be >= 0" }
+            require(value >= 0) { "tournament.post_match.kick_delay_ticks must be >= 0" }
         }
     }
-
-
-    /**
-     * Global ceremony map (applies to ANY match end, both matchmaking and tournament).
-     *
-     * If enabled, participants of a recorded match are moved to a ceremony world clone and
-     * restricted to their team pedestal square.
-     */
-    val CEREMONY_ENABLED = object : ConfigKey<Boolean>("ceremony.enabled", false) {}
-
-    /**
-     * Template world name to clone for ceremony.
-     *
-     * If empty, falls back to tournament.ceremony.world (legacy).
-     */
-    val CEREMONY_TEMPLATE_WORLD = object : ConfigKey<String>("ceremony.template_world", "") {}
-
-    /**
-     * Optional explicit clone world name. If empty, a stable per-server name is generated.
-     */
-    val CEREMONY_CLONE_WORLD = object : ConfigKey<String>("ceremony.clone_world", "") {}
-
-    
-    val CEREMONY_EXIT_WORLD = object : ConfigKey<String>("ceremony.exit_world", "") {}
-
-    /**
-     * Delay (ticks) before moving match participants to ceremony (to let modes finish ENDING/CLEANUP).
-     */
-    val CEREMONY_POST_MATCH_DELAY_TICKS = object : ConfigKey<Int>("ceremony.post_match_delay_ticks", 40) {
-        override fun validate(value: Int) {
-            require(value >= 0) { "ceremony.post_match_delay_ticks must be >= 0" }
-        }
-    }
-
-    /**
-     * 4 pedestal regions (one per team) in the ceremony world.
-     *
-     * Format per entry (integers, commas/spaces accepted):
-     *  - "x z" (2 numbers) -> 2x2 at spawnY
-     *  - "x y z" (3 numbers) -> 2x2 at given y
-     *  - "x1 z1 x2 z2" (4 numbers) -> rectangle at spawnY
-     *  - "x1 y z1 x2 z2" (5 numbers) -> rectangle at y
-     *  - "x1 y z1 x2 y2 z2" (6+ numbers) -> rectangle at y
-     */
-    val CEREMONY_PEDESTALS = object : ConfigKey<List<String>>("ceremony.pedestals", emptyList()) {}
 
     val USE_LIBRE_LOGIN = object : ConfigKey<Boolean>("uuid.use_libre_login", true) {}
 

@@ -24,8 +24,6 @@ import ru.joutak.minigames.listener.WhitelistChangeListener
 import ru.joutak.minigames.listener.WhitelistReloadListener
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.results.ResultsManager
-import ru.joutak.minigames.ceremony.CeremonyListener
-import ru.joutak.minigames.ceremony.CeremonyManager
 import ru.joutak.minigames.spartakiad.SpartakiadManager
 import ru.joutak.minigames.spartakiad.participant.storage.SqliteParticipantStorage
 import ru.joutak.minigames.spartakiad.whitelist.storage.WhitelistStorage
@@ -98,7 +96,7 @@ object MiniGamesCore {
         initResultsManager()
 
         initTournamentManager()
-        initCeremonyManager()
+        // Ceremony is implemented by each mode during its own ENDING/CLEANUP.
 
         loadDependencies()
         initSpartakiadManager()
@@ -428,15 +426,6 @@ object MiniGamesCore {
         }
     }
 
-
-
-    private fun initCeremonyManager() {
-        try {
-            CeremonyManager.initialize(plugin, configuration, apiResultsFile)
-        } catch (_: Throwable) {
-        }
-    }
-
     private fun loadDependencies() {
         val useLL = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
         plugin.logger.info("LibreLogin enabled in config: $useLL")
@@ -535,7 +524,6 @@ object MiniGamesCore {
         Bukkit.getPluginManager().registerEvents(PlayerJoinListener, plugin)
         Bukkit.getPluginManager().registerEvents(PlayerQuitListener, plugin)
 
-        Bukkit.getPluginManager().registerEvents(CeremonyListener, plugin)
     }
 
     private fun registerCommands() {
@@ -563,11 +551,6 @@ object MiniGamesCore {
 
         try {
             TournamentManager.shutdown()
-        } catch (_: Throwable) {
-        }
-
-        try {
-            CeremonyManager.shutdown()
         } catch (_: Throwable) {
         }
 

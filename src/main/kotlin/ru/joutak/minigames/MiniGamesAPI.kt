@@ -1,8 +1,10 @@
 package ru.joutak.minigames
 
+import org.bukkit.Bukkit
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
-import ru.joutak.minigames.ceremony.CeremonyManager
+import ru.joutak.minigames.config.ConfigKeys
+import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
@@ -33,9 +35,36 @@ object MiniGamesAPI {
 
     fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
         // Tournament progress must update even if results storage is disabled.
-        TournamentManager.applyMatchResult(result)
-        CeremonyManager.handleMatchEnded(result)
+        // IMPORTANT: modes are responsible for any post-game ceremony/teleports.
+        val tournamentFuture = TournamentManager.applyMatchResult(result)
+
+        if (TournamentManager.isEnabled() && config.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_PARTICIPANTS)) {
+            tournamentFuture.thenAccept { ok ->
+                if (ok) {
+                    scheduleKickMatchParticipants(result)
+                }
+            }
+        }
+
         return ResultsManager.recordMatch(result)
+    }
+
+    fun isTournamentEnabled(): Boolean = TournamentManager.isEnabled()
+
+    private fun scheduleKickMatchParticipants(result: MatchResult) {
+        val delay = config.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_DELAY_TICKS).toLong().coerceAtLeast(0L)
+        val bypassPerm = config.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
+
+        Bukkit.getScheduler().runTaskLater(plugin, Runnable {
+            val msg = Messages.prefixedComponent("messages.tournament.post_match_kick")
+            for (p in result.players) {
+                val pl = Bukkit.getPlayer(p.playerUuid) ?: continue
+                if (!pl.isOnline) continue
+                if (TournamentManager.isBypassUuid(pl.uniqueId)) continue
+                if (bypassPerm.isNotBlank() && pl.hasPermission(bypassPerm)) continue
+                pl.kick(msg)
+            }
+        }, delay)
     }
 
     fun hasPlayerWon(
