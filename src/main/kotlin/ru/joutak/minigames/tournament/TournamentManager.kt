@@ -10,6 +10,7 @@ import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.advance.TournamentAdvanceManager
+import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
 import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
 import ru.joutak.minigames.tournament.model.TournamentGateResult
@@ -828,9 +829,16 @@ object TournamentManager {
                 }
             }
 
-            val advanceAllowed = TournamentAdvanceManager.isTeamAllowed(plugin, eventId, stage, teamKey)
-            if (advanceAllowed == false) {
-                return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.NOT_QUALIFIED)
+            val seededAllowed = TournamentSeedingManager.isTeamAllowed(plugin, eventId, stage, teamKey)
+            if (seededAllowed != null) {
+                if (!seededAllowed) {
+                    return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.NOT_QUALIFIED)
+                }
+            } else {
+                val advanceAllowed = TournamentAdvanceManager.isTeamAllowed(plugin, eventId, stage, teamKey)
+                if (advanceAllowed == false) {
+                    return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.NOT_QUALIFIED)
+                }
             }
 
             val mode = getTournamentProgressMode()

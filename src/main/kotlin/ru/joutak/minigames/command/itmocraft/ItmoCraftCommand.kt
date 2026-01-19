@@ -16,6 +16,8 @@ import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.tournament.advance.TournamentAdvanceManager
 import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
+import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
+import java.io.File
 
 /**
  * Public ITMOcraft command.
@@ -44,6 +46,7 @@ object ItmoCraftCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStac
             .then(buildRatingPublicNode())
             .then(buildQualifierNode().requires { it.sender.hasPermission(adminPerm) })
             .then(buildExportNode().requires { it.sender.hasPermission(adminPerm) })
+            .then(buildSeedNode(plugin).requires { it.sender.hasPermission(adminPerm) })
             .then(buildAdvanceNode(plugin).requires { it.sender.hasPermission(adminPerm) })
     }
 
@@ -224,6 +227,244 @@ object ItmoCraftCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStac
                         Command.SINGLE_SUCCESS
                     }
             )
+    }
+
+    private fun buildSeedNode(plugin: org.bukkit.plugin.java.JavaPlugin): LiteralArgumentBuilder<CommandSourceStack> {
+        return Commands.literal("seed")
+            .then(
+                Commands.literal("status")
+                    .executes { ctx ->
+                        val eventId = MiniGamesCore.configuration.get(ru.joutak.minigames.config.ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+                        val stage = MiniGamesCore.configuration.get(ru.joutak.minigames.config.ConfigKeys.TOURNAMENT_STAGE).trim()
+                        val seeded = TournamentSeedingManager.getApplicable(plugin, eventId, stage)
+                        if (seeded == null) {
+                            send(ctx.source.sender, Component.text("No seeded_teams.yml for event='$eventId' stage='$stage'", NamedTextColor.DARK_GRAY))
+                            return@executes Command.SINGLE_SUCCESS
+                        }
+
+                        send(
+                            ctx.source.sender,
+                            Component.text(
+                                "Seeded teams: event=${seeded.eventId} from=${seeded.fromStage} to=${seeded.toStage} count=${seeded.teams.size} generated_at=${seeded.generatedAtMs}",
+                                NamedTextColor.GREEN,
+                            )
+                        )
+                        val preview = seeded.teams.take(30).joinToString(", ") { "#${it.seed}:${it.teamKey}" }
+                        if (preview.isNotBlank()) {
+                            send(ctx.source.sender, Component.text(preview, NamedTextColor.GRAY))
+                        }
+                        if (seeded.teams.size > 30) {
+                            send(ctx.source.sender, Component.text("... +${seeded.teams.size - 30} more", NamedTextColor.DARK_GRAY))
+                        }
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("reload")
+                    .executes { ctx ->
+                        val loaded = TournamentSeedingManager.load(plugin)
+                        send(
+                            ctx.source.sender,
+                            if (loaded != null) Component.text("seeded_teams.yml reloaded (${loaded.teams.size} teams)", NamedTextColor.GREEN)
+                            else Component.text("No seeded_teams.yml", NamedTextColor.DARK_GRAY)
+                        )
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("clear")
+                    .executes { ctx ->
+                        val ok = TournamentSeedingManager.clear(plugin)
+                        send(
+                            ctx.source.sender,
+                            if (ok) Component.text("seeded_teams.yml cleared", NamedTextColor.GREEN)
+                            else Component.text("Failed to clear seeded_teams.yml", NamedTextColor.RED)
+                        )
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("generate")
+                    .then(
+                        Commands.literal("to")
+                            .then(
+                                Commands.argument("to_stage", StringArgumentType.word())
+                                    .then(
+                                        Commands.literal("top")
+                                            .then(
+                                                Commands.argument("take", IntegerArgumentType.integer(1, 512))
+                                                    .executes { ctx ->
+                                                        val toStage = StringArgumentType.getString(ctx, "to_stage")
+                                                        val take = IntegerArgumentType.getInteger(ctx, "take")
+                                                        val ok = generateSeededFromSnapshot(plugin, toStage, take, includeIncomplete = false)
+                                                        send(
+                                                            ctx.source.sender,
+                                                            if (ok.ok) Component.text(ok.message, NamedTextColor.GREEN)
+                                                            else Component.text(ok.message, NamedTextColor.RED)
+                                                        )
+                                                        Command.SINGLE_SUCCESS
+                                                    }
+                                                    .then(
+                                                        Commands.literal("all")
+                                                            .executes { ctx ->
+                                                                val toStage = StringArgumentType.getString(ctx, "to_stage")
+                                                                val take = IntegerArgumentType.getInteger(ctx, "take")
+                                                                val ok = generateSeededFromSnapshot(plugin, toStage, take, includeIncomplete = true)
+                                                                send(
+                                                                    ctx.source.sender,
+                                                                    if (ok.ok) Component.text(ok.message, NamedTextColor.GREEN)
+                                                                    else Component.text(ok.message, NamedTextColor.RED)
+                                                                )
+                                                                Command.SINGLE_SUCCESS
+                                                            }
+                                                    )
+                                            )
+                                    )
+                            )
+                    )
+            )
+            .then(
+                Commands.literal("import")
+                    .then(
+                        Commands.literal("csv")
+                            .then(
+                                Commands.argument("file", StringArgumentType.word())
+                                    .then(
+                                        Commands.literal("to")
+                                            .then(
+                                                Commands.argument("to_stage", StringArgumentType.word())
+                                                    .executes { ctx ->
+                                                        val file = StringArgumentType.getString(ctx, "file")
+                                                        val toStage = StringArgumentType.getString(ctx, "to_stage")
+                                                        val res = importSeededFromCsv(plugin, file, toStage)
+                                                        send(
+                                                            ctx.source.sender,
+                                                            if (res.ok) Component.text(res.message, NamedTextColor.GREEN)
+                                                            else Component.text(res.message, NamedTextColor.RED)
+                                                        )
+                                                        Command.SINGLE_SUCCESS
+                                                    }
+                                            )
+                                    )
+                            )
+                    )
+            )
+    }
+
+    private data class SeedOpResult(val ok: Boolean, val message: String)
+
+    private fun generateSeededFromSnapshot(plugin: org.bukkit.plugin.java.JavaPlugin, toStage: String, take: Int, includeIncomplete: Boolean): SeedOpResult {
+        val cfg = TournamentQualifierManager.getConfig()
+        val snapshot = TournamentQualifierManager.getSnapshot()
+            ?: return SeedOpResult(false, "No qualifier snapshot. Run /itmocraft qualifier recalc")
+
+        val rows = if (includeIncomplete) {
+            snapshot.rows
+        } else {
+            snapshot.rows.filter { it.matchesCount >= cfg.minMatches }
+        }
+
+        if (rows.isEmpty()) {
+            return SeedOpResult(false, "No teams to seed (includeIncomplete=$includeIncomplete, min_matches=${cfg.minMatches})")
+        }
+
+        val sorted = rows.sortedWith(compareByDescending<ru.joutak.minigames.tournament.qualifier.model.QualifierTeamRow> { it.eloRating }.thenBy { it.teamKey })
+        val n = take.coerceAtMost(sorted.size)
+        val chosen = sorted.take(n)
+
+        val data = TournamentSeedingManager.SeededTeamsFile(
+            eventId = cfg.eventId,
+            fromStage = cfg.stage,
+            toStage = toStage,
+            generatedAtMs = System.currentTimeMillis(),
+            teams = chosen.mapIndexed { idx, r ->
+                TournamentSeedingManager.SeededTeam(
+                    teamKey = r.teamKey,
+                    seed = idx + 1,
+                    rating = r.eloRating.toDouble(),
+                    matchesCount = r.matchesCount,
+                )
+            }
+        )
+
+        val ok = TournamentSeedingManager.save(plugin, data)
+        return if (ok) SeedOpResult(true, "Seeded ${data.teams.size} teams to stage '$toStage' (seeded_teams.yml)")
+        else SeedOpResult(false, "Failed to save seeded_teams.yml")
+    }
+
+    private fun importSeededFromCsv(plugin: org.bukkit.plugin.java.JavaPlugin, relativePath: String, toStage: String): SeedOpResult {
+        val f = resolveInApiFolder(plugin, relativePath)
+            ?: return SeedOpResult(false, "Invalid path: $relativePath")
+
+        if (!f.exists() || !f.isFile) {
+            return SeedOpResult(false, "File not found: ${f.path}")
+        }
+
+        val lines = try {
+            f.readLines(Charsets.UTF_8)
+        } catch (_: Throwable) {
+            return SeedOpResult(false, "Failed to read: ${f.path}")
+        }
+
+        val parsed = mutableListOf<Pair<String, Int?>>()
+        for (raw in lines) {
+            val line = raw.trim()
+            if (line.isBlank()) continue
+            if (line.startsWith('#')) continue
+
+            val parts = line.split(',', ';', '	')
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+
+            if (parts.isEmpty()) continue
+            val first = parts[0].lowercase()
+            if (first == "team_key" || first == "team" || first == "teamkey") continue // header
+
+            val teamKey = parts[0]
+            val seed = parts.getOrNull(1)?.toIntOrNull()
+            parsed.add(teamKey to seed)
+        }
+
+        if (parsed.isEmpty()) {
+            return SeedOpResult(false, "No teams in CSV")
+        }
+
+        val seen = HashSet<String>()
+        val unique = parsed.filter { seen.add(it.first) }
+
+        var nextSeed = 1
+        val teams = unique.map { (teamKey, seedOpt) ->
+            val s = seedOpt ?: nextSeed++
+            if (seedOpt != null && seedOpt >= nextSeed) nextSeed = seedOpt + 1
+            TournamentSeedingManager.SeededTeam(teamKey = teamKey, seed = s)
+        }.sortedBy { it.seed }
+
+        val eventId = MiniGamesCore.configuration.get(ru.joutak.minigames.config.ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        val data = TournamentSeedingManager.SeededTeamsFile(
+            eventId = eventId,
+            fromStage = "import",
+            toStage = toStage,
+            generatedAtMs = System.currentTimeMillis(),
+            teams = teams,
+        )
+
+        val ok = TournamentSeedingManager.save(plugin, data)
+        return if (ok) SeedOpResult(true, "Imported ${teams.size} seeded teams to stage '$toStage' from ${f.name}")
+        else SeedOpResult(false, "Failed to save seeded_teams.yml")
+    }
+
+    private fun resolveInApiFolder(plugin: org.bukkit.plugin.java.JavaPlugin, relativePath: String): File? {
+        val raw = relativePath.trim().removePrefix("\"").removeSuffix("\"")
+        if (raw.isBlank()) return null
+        if (raw.startsWith('/') || raw.startsWith('\\')) return null
+        if (raw.contains("..")) return null
+
+        val apiDir = File(plugin.dataFolder, "minigamesapi")
+        val f = File(apiDir, raw)
+        val canonicalApi = try { apiDir.canonicalFile } catch (_: Throwable) { return null }
+        val canonicalFile = try { f.canonicalFile } catch (_: Throwable) { return null }
+
+        return if (canonicalFile.path.startsWith(canonicalApi.path)) canonicalFile else null
     }
 
     private fun buildAdvanceNode(plugin: org.bukkit.plugin.java.JavaPlugin): LiteralArgumentBuilder<CommandSourceStack> {

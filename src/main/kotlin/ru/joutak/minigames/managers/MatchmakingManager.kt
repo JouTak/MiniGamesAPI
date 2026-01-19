@@ -14,6 +14,7 @@ import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.ui.QueueBossBarManager
 import ru.joutak.minigames.ui.LobbyScoreboardManager
 import ru.joutak.minigames.tournament.TournamentManager
+import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
 import java.util.ArrayDeque
 import java.util.UUID
 import kotlin.math.ceil
@@ -317,7 +318,12 @@ object MatchmakingManager {
             list.sortBy { it.name.lowercase() }
         }
 
-        val allTeams = byTeam.entries
+        val eventId = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        val stage = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_STAGE).trim()
+        val seedFile = TournamentSeedingManager.getApplicable(MiniGamesCore.plugin, eventId, stage)
+        val seedByKey = seedFile?.teams?.associate { it.teamKey to it.seed } ?: emptyMap()
+
+        val rawTeams = byTeam.entries
             .map { e ->
                 val members = e.value
                 members.sortBy { it.name.lowercase() }
@@ -328,7 +334,16 @@ object MatchmakingManager {
                     forceReady = TournamentManager.isTeamForceReady(e.key),
                 )
             }
-            .sortedWith(compareByDescending<TeamEntry> { it.size }.thenBy { it.key })
+
+        val allTeams = if (seedByKey.isNotEmpty()) {
+            rawTeams.sortedWith(
+                compareBy<TeamEntry> { seedByKey[it.key] ?: Int.MAX_VALUE }
+                    .thenByDescending { it.size }
+                    .thenBy { it.key }
+            )
+        } else {
+            rawTeams.sortedWith(compareByDescending<TeamEntry> { it.size }.thenBy { it.key })
+        }
 
         // Reset only instances we are allowed to rebuild.
         rebuildInstances.forEach { it.resetTournamentLobbyState() }
