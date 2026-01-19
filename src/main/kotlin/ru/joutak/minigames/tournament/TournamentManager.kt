@@ -956,13 +956,21 @@ object TournamentManager {
                 val teamKey = teamKeyByTeamId[tid]?.trim().orEmpty()
                 if (teamKey.isBlank()) continue
 
+                val feedback = Messages.feedbackLinkComponent()
+
                 if (skippedReason != null) {
-                    player.sendMessage(
-                        Messages.prefixedComponent(
-                            "messages.tournament.elo_rating_update_skipped",
-                            mapOf("reason" to skippedReason)
-                        )
+                    val msg = Messages.prefixedComponent(
+                        "messages.tournament.elo_rating_update_skipped",
+                        mapOf("reason" to skippedReason)
                     )
+                    if (msg != Component.empty()) {
+                        player.sendMessage(msg)
+                    } else {
+                        player.sendMessage(Component.text("Elo: skipped ($skippedReason)"))
+                    }
+                    if (feedback != Component.empty()) {
+                        player.sendMessage(feedback)
+                    }
                     continue
                 }
 
@@ -976,7 +984,16 @@ object TournamentManager {
                     "paint_percent" to formatPercent(ta.paintPercent)
                 )
 
-                player.sendMessage(Messages.prefixedComponent("messages.tournament.elo_rating_update", placeholders))
+                val msg = Messages.prefixedComponent("messages.tournament.elo_rating_update", placeholders)
+                if (msg != Component.empty()) {
+                    player.sendMessage(msg)
+                } else {
+                    player.sendMessage(Component.text("Elo: ${placeholders["rating"]} (${placeholders["delta"]})"))
+                }
+
+                if (feedback != Component.empty()) {
+                    player.sendMessage(feedback)
+                }
             }
         })
     }

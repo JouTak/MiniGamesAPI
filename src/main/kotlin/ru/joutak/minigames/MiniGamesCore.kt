@@ -715,6 +715,12 @@ messages:
     help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby"
     help_tournament_elo: "&7Квалификация (ELO): команды назначаются организаторами. Матчи собираются автоматически, попытки не ограничены (минимум 3). Команды: &e/forceready&7, &c/unready&7, &e/lobby"
 
+  feedback:
+    label: "&bФорма обратной связи"
+    url: ""
+    hover: "&7Нажми, чтобы открыть"
+    missing: "&7Форма обратной связи: &c(не настроено)"
+
   lobby:
     command_unavailable: "&cКоманда недоступна."
 
@@ -733,6 +739,12 @@ messages:
     force_ready_off: "&eОк! Метка готовности неполным составом снята."
     force_ready_cleared: "&eМетка готовности неполным составом снята."
     force_ready_already_cleared: "&7Метка готовности неполным составом уже снята."
+    moved_to_ceremony: "&7Вы больше не можете участвовать в этом этапе. Переносим на торжественную карту..."
+    moved_to_ceremony_kick_later: "&7Вы больше не можете участвовать в этом этапе. Через &f{seconds}&7 сек вы будете отключены."
+    post_match_kick: "&7Матч завершён. Для следующей попытки зайдите на сервер снова."
+    # Elo-режим: обновление рейтинга после матча (placeholders: {team_key}, {rating}, {delta}, {place}, {paint_percent})
+    elo_rating_update: "&bELO&7: &f{team_key}&7 = &a{rating}&7 (&e{delta}&7) &8| &7место: &f{place}&7, краска: &f{paint_percent}&7%"
+    elo_rating_update_skipped: "&cELO не учтён: &7{reason}"
     error: "&cОшибка проверки доступа. Обратитесь к администратору."
 
   ready:

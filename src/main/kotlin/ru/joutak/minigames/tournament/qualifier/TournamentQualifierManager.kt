@@ -67,6 +67,11 @@ object TournamentQualifierManager {
     @Volatile
     private var lastAudit: List<QualifierMatchAudit> = emptyList()
 
+    data class TeamEloInfo(val rating: Int, val delta: Int?)
+
+    @Volatile
+    private var teamEloUiCache: Map<String, TeamEloInfo> = emptyMap()
+
     @Volatile
     private var recalcInFlight: Boolean = false
 
@@ -98,6 +103,12 @@ object TournamentQualifierManager {
     fun getSnapshot(): QualifierSnapshot? = lastSnapshot
 
     fun getLastAudit(): List<QualifierMatchAudit> = lastAudit
+
+    fun getTeamEloInfo(teamKey: String): TeamEloInfo? {
+        val key = teamKey.trim().lowercase()
+        if (key.isEmpty()) return null
+        return teamEloUiCache[key]
+    }
 
     fun isRecalcInFlight(): Boolean = recalcInFlight
 
@@ -221,6 +232,7 @@ object TournamentQualifierManager {
 
                 lastSnapshot = snapshot
                 lastAudit = calc.getAudit()
+                teamEloUiCache = buildTeamEloUiCache(snapshot, lastAudit)
                 lastError = null
                 snapshot
             } catch (t: Throwable) {
@@ -232,6 +244,29 @@ object TournamentQualifierManager {
                 recalcInFlight = false
             }
         }, executor)
+    }
+
+    private fun buildTeamEloUiCache(snapshot: QualifierSnapshot, audit: List<QualifierMatchAudit>): Map<String, TeamEloInfo> {
+        val ratingByTeam = HashMap<String, Int>()
+        for (r in snapshot.rows) {
+            val k = r.teamKey.trim().lowercase()
+            if (k.isNotEmpty()) ratingByTeam[k] = r.eloRating
+        }
+
+        val deltaByTeam = HashMap<String, Int>()
+        for (a in audit) {
+            if (a.skipped) continue
+            for (t in a.teams) {
+                val k = t.teamKey.trim().lowercase()
+                if (k.isNotEmpty()) deltaByTeam[k] = round(t.delta).toInt()
+            }
+        }
+
+        val out = HashMap<String, TeamEloInfo>()
+        for ((k, rating) in ratingByTeam) {
+            out[k] = TeamEloInfo(rating = rating, delta = deltaByTeam[k])
+        }
+        return out
     }
 
     fun exportRatingAndAudit(): Pair<List<File>, String> {

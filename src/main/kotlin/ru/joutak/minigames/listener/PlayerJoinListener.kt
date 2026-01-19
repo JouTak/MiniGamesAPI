@@ -1,5 +1,6 @@
 package ru.joutak.minigames.listener
 
+import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -113,6 +114,11 @@ object PlayerJoinListener : Listener {
                 else -> {
                     player.sendMessage(Messages.prefixedComponent("messages.join.help"))
                 }
+            }
+
+            val fb = Messages.feedbackLinkComponent()
+            if (fb != Component.empty()) {
+                player.sendMessage(fb)
             }
         }, 20)
     }
