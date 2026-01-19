@@ -309,7 +309,7 @@ object TournamentQualifierManager {
 
     fun getRatingLines(limit: Int, includeIncomplete: Boolean): List<Component> {
         val snap = lastSnapshot
-            ?: return listOf(Component.text("No qualifier snapshot. Run /tournament qualifier recalc", NamedTextColor.RED))
+            ?: return listOf(Component.text("No qualifier snapshot. Run /itmocraft qualifier recalc", NamedTextColor.RED))
 
         val minMatches = config.minMatches
         val rows = if (includeIncomplete) snap.rows else snap.rows.filter { it.matchesCount >= minMatches }
@@ -338,6 +338,52 @@ object TournamentQualifierManager {
             out.add(Component.text("... +${rows.size - shown.size} more", NamedTextColor.DARK_GRAY))
         }
 
+        return out
+    }
+
+    /**
+     * Returns lines for a specific team standing in the current qualifier snapshot.
+     * Useful for public commands (players tracking their team position).
+     */
+    fun getTeamStandingLines(teamKey: String, includeIncomplete: Boolean, context: Int = 2): List<Component> {
+        val snap = lastSnapshot
+            ?: return listOf(Component.text("No qualifier snapshot. Run /itmocraft qualifier recalc", NamedTextColor.RED))
+
+        val key = teamKey.trim()
+        if (key.isEmpty()) {
+            return listOf(Component.text("team_key is empty", NamedTextColor.RED))
+        }
+
+        val minMatches = config.minMatches
+        val rows = if (includeIncomplete) snap.rows else snap.rows.filter { it.matchesCount >= minMatches }
+        if (rows.isEmpty()) return listOf(Component.text("No teams to display", NamedTextColor.DARK_GRAY))
+
+        val idx = rows.indexOfFirst { it.teamKey.equals(key, ignoreCase = true) }
+        if (idx < 0) {
+            return listOf(Component.text("Team not found in rating: $key", NamedTextColor.RED))
+        }
+
+        val out = ArrayList<Component>(8)
+        out.add(Component.text("Qualifier rating (stage=${snap.stage})", NamedTextColor.AQUA))
+        out.add(Component.text("# team_key | elo | matches | avgPlace | bestPaint", NamedTextColor.GRAY))
+
+        val from = (idx - context).coerceAtLeast(0)
+        val to = (idx + context).coerceAtMost(rows.size - 1)
+        for (i in from..to) {
+            val row = rows[i]
+            val need = (minMatches - row.matchesCount).coerceAtLeast(0)
+            val suffix = if (need > 0) "  NOT QUALIFIED (need $need more)" else ""
+            val color = if (i == idx) NamedTextColor.YELLOW else if (need > 0) NamedTextColor.DARK_GRAY else NamedTextColor.WHITE
+            out.add(
+                Component.text(
+                    "${i + 1}. ${row.teamKey} | ${row.eloRating} | ${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatDouble(row.bestPaint)}$suffix",
+                    color,
+                )
+            )
+        }
+
+        if (from > 0) out.add(2, Component.text("...", NamedTextColor.DARK_GRAY))
+        if (to < rows.size - 1) out.add(Component.text("...", NamedTextColor.DARK_GRAY))
         return out
     }
 

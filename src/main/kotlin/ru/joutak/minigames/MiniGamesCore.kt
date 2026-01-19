@@ -6,6 +6,7 @@ import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.ForceRunCommand
 import ru.joutak.minigames.command.forceready.ForceReadyCommand
+import ru.joutak.minigames.command.itmocraft.ItmoCraftCommand
 import ru.joutak.minigames.command.mg.MiniGamesCommand
 import ru.joutak.minigames.command.mg.StartCommand
 import ru.joutak.minigames.command.ready.ReadyCommand
@@ -571,6 +572,7 @@ object MiniGamesCore {
         val forceRunCmd = ForceRunCommand.getBuilder().build()
         val forceReadyCmd = ForceReadyCommand.getBuilder().build()
         val tournamentCmd = TournamentCommand.getBuilder().build()
+        val itmoCraftCmd = ItmoCraftCommand.getBuilder().build()
 
         plugin.lifecycleManager.registerEventHandler(LifecycleEvents.COMMANDS) { event ->
             event.registrar().register(readyCmd)
@@ -580,6 +582,7 @@ object MiniGamesCore {
             event.registrar().register(forceRunCmd)
             event.registrar().register(forceReadyCmd)
             event.registrar().register(tournamentCmd)
+            event.registrar().register(itmoCraftCmd)
         }
     }
 
