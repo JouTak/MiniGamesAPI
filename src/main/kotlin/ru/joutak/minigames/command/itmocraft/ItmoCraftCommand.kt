@@ -9,6 +9,7 @@ import io.papermc.paper.command.brigadier.Commands
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.ComponentLike
 import net.kyori.adventure.text.format.NamedTextColor
+import org.bukkit.Bukkit
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import ru.joutak.minigames.MiniGamesCore
@@ -46,8 +47,56 @@ object ItmoCraftCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStac
             .then(buildRatingPublicNode())
             .then(buildQualifierNode().requires { it.sender.hasPermission(adminPerm) })
             .then(buildExportNode().requires { it.sender.hasPermission(adminPerm) })
+            .then(buildRosterNode().requires { it.sender.hasPermission(adminPerm) })
             .then(buildSeedNode(plugin).requires { it.sender.hasPermission(adminPerm) })
             .then(buildAdvanceNode(plugin).requires { it.sender.hasPermission(adminPerm) })
+    }
+
+    private fun buildRosterNode(): LiteralArgumentBuilder<CommandSourceStack> {
+        return Commands.literal("roster")
+            .then(
+                Commands.literal("status")
+                    .executes { ctx ->
+                        val players = Bukkit.getOnlinePlayers().toList()
+                        val byTeam = players
+                            .filterNot { TournamentManager.isBypassUuid(it.uniqueId) }
+                            .groupBy { TournamentManager.getCachedTeamKey(it.uniqueId) ?: "<unknown>" }
+                            .toList()
+                            .sortedWith(compareByDescending<Pair<String, List<Player>>> { it.second.size }.thenBy { it.first })
+
+                        send(ctx.source.sender, Component.text("Online roster cache: ${players.size} players", NamedTextColor.GRAY))
+                        for ((teamKey, list) in byTeam.take(20)) {
+                            send(ctx.source.sender, Component.text("$teamKey: ${list.size}", NamedTextColor.GRAY))
+                        }
+                        if (byTeam.size > 20) {
+                            send(ctx.source.sender, Component.text("... +${byTeam.size - 20} more", NamedTextColor.DARK_GRAY))
+                        }
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("reload")
+                    .executes { ctx ->
+                        val sender = ctx.source.sender
+                        send(sender, Component.text("Reloading tournament roster for ONLINE players...", NamedTextColor.YELLOW))
+
+                        TournamentManager.reloadOnlineRosterAsync { stats ->
+                            if (stats.ok) {
+                                send(
+                                    sender,
+                                    Component.text(
+                                        "${stats.message}: scanned=${stats.scannedPlayers}, bypass=${stats.bypassPlayers}, participants=${stats.participants}, removed=${stats.notParticipants}",
+                                        NamedTextColor.GREEN,
+                                    )
+                                )
+                            } else {
+                                send(sender, Component.text("Roster reload failed: ${stats.message}", NamedTextColor.RED))
+                            }
+                        }
+
+                        Command.SINGLE_SUCCESS
+                    }
+            )
     }
 
     private fun buildRatingPublicNode(): LiteralArgumentBuilder<CommandSourceStack> {

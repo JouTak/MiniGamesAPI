@@ -28,7 +28,55 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
             .then(buildQualifierNode())
             .then(buildRatingNode())
             .then(buildExportNode())
+            .then(buildRosterNode())
             .then(buildAdvanceNode(plugin))
+    }
+
+    private fun buildRosterNode(): LiteralArgumentBuilder<CommandSourceStack> {
+        return Commands.literal("roster")
+            .then(
+                Commands.literal("status")
+                    .executes { ctx ->
+                        val players = org.bukkit.Bukkit.getOnlinePlayers().toList()
+                        val byTeam = players
+                            .filterNot { ru.joutak.minigames.tournament.TournamentManager.isBypassUuid(it.uniqueId) }
+                            .groupBy { ru.joutak.minigames.tournament.TournamentManager.getCachedTeamKey(it.uniqueId) ?: "<unknown>" }
+                            .toList()
+                            .sortedWith(compareByDescending<Pair<String, List<org.bukkit.entity.Player>>> { it.second.size }.thenBy { it.first })
+
+                        send(ctx.source.sender, Component.text("Online roster cache: ${players.size} players", NamedTextColor.GRAY))
+                        for ((teamKey, list) in byTeam.take(30)) {
+                            send(ctx.source.sender, Component.text("$teamKey: ${list.size}", NamedTextColor.GRAY))
+                        }
+                        if (byTeam.size > 30) {
+                            send(ctx.source.sender, Component.text("... +${byTeam.size - 30} more", NamedTextColor.DARK_GRAY))
+                        }
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("reload")
+                    .executes { ctx ->
+                        val sender = ctx.source.sender
+                        send(sender, Component.text("Reloading tournament roster for ONLINE players...", NamedTextColor.YELLOW))
+
+                        ru.joutak.minigames.tournament.TournamentManager.reloadOnlineRosterAsync { stats ->
+                            if (stats.ok) {
+                                send(
+                                    sender,
+                                    Component.text(
+                                        "${stats.message}: scanned=${stats.scannedPlayers}, bypass=${stats.bypassPlayers}, participants=${stats.participants}, removed=${stats.notParticipants}",
+                                        NamedTextColor.GREEN,
+                                    )
+                                )
+                            } else {
+                                send(sender, Component.text("Roster reload failed: ${stats.message}", NamedTextColor.RED))
+                            }
+                        }
+
+                        Command.SINGLE_SUCCESS
+                    }
+            )
     }
 
     private fun buildQualifierNode(): LiteralArgumentBuilder<CommandSourceStack> {

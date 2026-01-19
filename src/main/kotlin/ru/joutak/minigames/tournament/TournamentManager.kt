@@ -3,6 +3,7 @@ package ru.joutak.minigames.tournament
 import net.kyori.adventure.text.Component
 import org.bukkit.Bukkit
 import org.bukkit.plugin.java.JavaPlugin
+import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
@@ -803,6 +804,132 @@ object TournamentManager {
     fun isEnabled(): Boolean = enabled
 
     fun isBypassUuid(uuid: UUID): Boolean = uuid in bypassUuids
+
+    data class RosterReloadStats(
+        val ok: Boolean,
+        val scannedPlayers: Int,
+        val bypassPlayers: Int,
+        val participants: Int,
+        val notParticipants: Int,
+        val message: String,
+    )
+
+    /**
+     * Reloads tournament roster (team_key mapping) for ONLINE players, without plugin reload.
+     *
+     * - Clears caches: pre-login cache, pending reservations, team UI cache.
+     * - Re-resolves team_key for all online non-bypass players from tournament storage.
+     * - Removes players that are no longer participants from queues/waiting teams.
+     *
+     * Must be called from the main thread.
+     */
+    fun reloadOnlineRosterAsync(onComplete: (RosterReloadStats) -> Unit) {
+        if (!enabled) {
+            onComplete(RosterReloadStats(ok = false, scannedPlayers = 0, bypassPlayers = 0, participants = 0, notParticipants = 0, message = "Tournament is disabled"))
+            return
+        }
+
+        val s = storage
+        if (!initOk || s == null) {
+            onComplete(RosterReloadStats(ok = false, scannedPlayers = 0, bypassPlayers = 0, participants = 0, notParticipants = 0, message = "Tournament storage is not initialized"))
+            return
+        }
+
+        val eventId = configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+        if (eventId.isBlank()) {
+            onComplete(RosterReloadStats(ok = false, scannedPlayers = 0, bypassPlayers = 0, participants = 0, notParticipants = 0, message = "tournament.event_id is empty"))
+            return
+        }
+
+        // Snapshot online players on main thread (Bukkit API).
+        val snapshot = Bukkit.getOnlinePlayers().map { it.uniqueId to it.name }
+
+        CompletableFuture.supplyAsync({
+            val resolved = HashMap<UUID, String>()
+            var bypass = 0
+            var notParticipant = 0
+
+            for ((uuid, name) in snapshot) {
+                if (uuid in bypassUuids) {
+                    bypass++
+                    continue
+                }
+
+                val tk = try {
+                    s.findTeamKey(eventId, uuid, name)
+                } catch (_: Throwable) {
+                    null
+                }
+
+                if (tk.isNullOrBlank()) {
+                    notParticipant++
+                } else {
+                    resolved[uuid] = tk
+                }
+            }
+
+            Triple(resolved, bypass, notParticipant)
+        }, executor).whenComplete { triple, throwable ->
+            Bukkit.getScheduler().runTask(plugin, Runnable {
+                if (throwable != null) {
+                    onComplete(
+                        RosterReloadStats(
+                            ok = false,
+                            scannedPlayers = snapshot.size,
+                            bypassPlayers = 0,
+                            participants = 0,
+                            notParticipants = 0,
+                            message = "Failed to reload roster: ${throwable.message}",
+                        )
+                    )
+                    return@Runnable
+                }
+
+                val (resolved, bypass, notParticipant) = triple
+
+                // Clear caches.
+                preLoginTeamKeyCache.clear()
+                pendingSlotsByPlayer.clear()
+                pendingCountByTeamKey.clear()
+                teamUiCache.clear()
+
+                // Rebuild online mapping from scratch.
+                onlineTeamKeyByPlayer.clear()
+                onlineCountByTeamKey.clear()
+
+                // Apply resolved team keys.
+                for ((uuid, teamKey) in resolved) {
+                    markOnline(uuid, teamKey)
+                }
+
+                // Remove players that are no longer participants from queues/waiting teams.
+                if (notParticipant > 0) {
+                    for ((uuid, _) in snapshot) {
+                        if (uuid in bypassUuids) continue
+                        if (resolved.containsKey(uuid)) continue
+                        val p = Bukkit.getPlayer(uuid) ?: continue
+                        MatchmakingManager.removePlayer(p)
+                    }
+                }
+
+                // Rebuild waiting assignments to reflect new team->player mapping.
+                if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+                    MatchmakingManager.rebuildTournamentWaitingAssignments()
+                }
+
+                onComplete(
+                    RosterReloadStats(
+                        ok = true,
+                        scannedPlayers = snapshot.size,
+                        bypassPlayers = bypass,
+                        participants = resolved.size,
+                        notParticipants = notParticipant,
+                        message = "Roster reloaded",
+                    )
+                )
+            })
+        }
+    }
 
     fun checkAccess(uuid: UUID, name: String): TournamentGateResult {
         if (!enabled) return TournamentGateResult(true)

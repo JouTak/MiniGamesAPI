@@ -65,12 +65,15 @@ object Messages {
             return prefixedComponent("messages.feedback.missing")
         }
 
-        val labelRaw = yaml.getString("messages.feedback.label") ?: "&bФорма обратной связи"
-        val hoverRaw = yaml.getString("messages.feedback.hover") ?: "&7Открыть"
+        // Prefix/label/hover may contain placeholders like {mode_display}.
+        val prefix = formatRaw("messages.prefix", emptyMap()) ?: (yaml.getString("messages.prefix") ?: "")
+        val label = formatRaw("messages.feedback.label", emptyMap())
+            ?: (yaml.getString("messages.feedback.label") ?: "&bФорма обратной связи")
+        val hoverText = formatRaw("messages.feedback.hover", emptyMap())
+            ?: (yaml.getString("messages.feedback.hover") ?: "&7Открыть")
 
-        val prefix = yaml.getString("messages.prefix") ?: ""
-        val base = amp.deserialize(prefix + labelRaw)
-        val hover = amp.deserialize(hoverRaw)
+        val base = amp.deserialize(prefix + label)
+        val hover = amp.deserialize(hoverText)
 
         return base
             .clickEvent(ClickEvent.openUrl(url))
