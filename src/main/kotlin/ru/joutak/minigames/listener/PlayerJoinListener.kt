@@ -10,6 +10,7 @@ import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.tournament.TournamentManager
+import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 
 object PlayerJoinListener : Listener {
 
@@ -119,6 +120,36 @@ object PlayerJoinListener : Listener {
             val fb = Messages.feedbackLinkComponent()
             if (fb != Component.empty()) {
                 player.sendMessage(fb)
+            }
+
+            // Show current Elo in lobby (best-effort; requires a recent qualifier snapshot).
+            if (tournamentEnabled) {
+                val teamKey = TournamentManager.getCachedTeamKey(player.uniqueId)
+                if (!teamKey.isNullOrBlank()) {
+                    val info = TournamentQualifierManager.getTeamEloInfo(teamKey)
+                    if (info != null) {
+                        val delta = info.delta
+                        val deltaStr = when {
+                            delta == null || delta == 0 -> ""
+                            delta > 0 -> "+$delta"
+                            else -> delta.toString()
+                        }
+                        val deltaSuffix = if (deltaStr.isBlank()) "" else " (&e$deltaStr&7)"
+
+                        player.sendMessage(
+                            Messages.prefixedComponent(
+                                "messages.elo.join_rating",
+                                mapOf(
+                                    "team_key" to teamKey,
+                                    "elo" to info.rating.toString(),
+                                    "delta_suffix" to deltaSuffix,
+                                )
+                            )
+                        )
+                    } else {
+                        player.sendMessage(Messages.prefixedComponent("messages.elo.join_no_snapshot", mapOf("team_key" to teamKey)))
+                    }
+                }
             }
         }, 20)
     }

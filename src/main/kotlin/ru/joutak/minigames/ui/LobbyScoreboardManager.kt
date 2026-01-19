@@ -14,6 +14,7 @@ import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.tournament.TournamentManager
+import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import java.util.UUID
 
 /**
@@ -178,6 +179,15 @@ object LobbyScoreboardManager {
             }
             val attempts = if (TournamentManager.isEloTournamentMode()) "∞" else (info.attemptsLeft?.toString() ?: "?")
 
+            val eloInfo = TournamentQualifierManager.getTeamEloInfo(myTeamKey)
+            val elo = eloInfo?.rating?.toString() ?: "?"
+            val eloDelta = when (val d = eloInfo?.delta) {
+                null -> ""
+                0 -> ""
+                else -> if (d > 0) "+$d" else d.toString()
+            }
+            val eloSuffix = if (eloDelta.isBlank()) "" else " ($eloDelta)"
+
             val tp = mapOf(
                 "team_key" to myTeamKey,
                 "team_name" to teamName,
@@ -185,6 +195,8 @@ object LobbyScoreboardManager {
                 "max" to maxOnline.toString(),
                 "attempts" to attempts,
                 "forceready_status" to frStatus,
+                "elo" to elo,
+                "elo_suffix" to eloSuffix,
             )
 
             lines += "&8 "
@@ -200,7 +212,7 @@ object LobbyScoreboardManager {
             )
             lines += formatLine(
                 key = "ui.lobby.scoreboard.tournament.status",
-                fallback = "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts}",
+                fallback = "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts} &8| &7Elo: &d{elo}&7{elo_suffix}",
                 placeholders = tp
             )
             lines += formatLine(
@@ -250,13 +262,29 @@ object LobbyScoreboardManager {
 
                 val fr = if (teamKey != null && TournamentManager.isTeamForceReady(teamKey)) " &aFR" else ""
 
+                val eloInfo = if (teamKey.isNullOrBlank()) null else TournamentQualifierManager.getTeamEloInfo(teamKey)
+                val eloBadge = if (teamKey.isNullOrBlank()) {
+                    ""
+                } else if (eloInfo != null) {
+                    val d = eloInfo.delta
+                    val dStr = when {
+                        d == null || d == 0 -> ""
+                        d > 0 -> "+$d"
+                        else -> d.toString()
+                    }
+                    val deltaPart = if (dStr.isBlank()) "" else "&7($dStr)"
+                    " &8[&d${eloInfo.rating}&8]$deltaPart"
+                } else {
+                    " &8[&d?&8]"
+                }
+
                 val members = if (team.isEmpty()) {
                     "&7пусто"
                 } else {
                     team.joinToString(", ") { it.name }.limitVisible(18)
                 }
 
-                lines += "$highlight$coloredName &7(${team.size}/$maxPerTeam)$fr &8- &f$members"
+                lines += "$highlight$coloredName$eloBadge &7(${team.size}/$maxPerTeam)$fr &8- &f$members"
             } else {
                 val teamName = resolveTeamName(yaml, teamNumber)
 

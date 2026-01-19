@@ -13,7 +13,7 @@ messages:
   join:
     help: '&7Команды: &a/ready&7, &b/teamselect&7, &c/unready'
     help_tournament: '&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
-    help_tournament_elo: '&7Квалификация ElO: играйте сколько угодно. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
+    help_tournament_elo: '&7Квалификация Elo: играйте сколько угодно. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
 
   feedback:
     label: '&bФорма обратной связи'
@@ -47,6 +47,11 @@ messages:
     elo_rating_update: '&bELO&7: &f{team_key}&7 = &a{rating}&7 (&e{delta}&7) &8| &7место: &f{place}&7, краска: &f{paint_percent}&7%'
     elo_rating_update_skipped: '&cELO не учтён: &7{reason}'
     error: '&cОшибка проверки доступа. Обратитесь к администратору.'
+
+  elo:
+    # Сообщение при входе в лобби (placeholders: {team_key}, {elo}, {delta_suffix})
+    join_rating: '&7ELO вашей команды &f{team_key}&7: &d{elo}&7{delta_suffix}'
+    join_no_snapshot: '&7ELO вашей команды &f{team_key}&7 пока не рассчитан. Сыграйте матч и дождитесь пересчёта.'
 
   ready:
     in_game: '&cВы уже в игре.'
