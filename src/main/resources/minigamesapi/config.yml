@@ -1,6 +1,6 @@
 minigamesapi:
   # Служебный маркер, чтобы отличать конфиг API от конфига режима.
-  config_version: 2
+  config_version: 3
 
 mode:
   # Короткое логическое имя режима (используется как mode_key в results и для кросс-режимной логики).
@@ -32,6 +32,22 @@ tournament:
   # Примеры: "round1", "round2", "round3".
   stage: "round1"
 
+  # Логика прогресса:
+  # - standard: attempts уменьшаются на матч; победитель отмечается won=true и исключается
+  # - elo: турнирный гейт/матчмейкинг остаются, но attempts/won не применяются (бесконечные матчи под Elo)
+  mode: "standard"
+
+  elo:
+    # Чтобы UI не выглядел пустым, в БД обеспечивается минимум attempts_left
+    # (но матчей можно играть сколько угодно).
+    min_attempts: 3
+    # Автоматически триггерить /tournament qualifier recalc после каждого матча
+    auto_recalc: true
+    post_match:
+      # В Elo-квалификации обычно не нужно кикать игроков после каждого матча.
+      kick_participants: false
+      kick_delay_ticks: 0
+
   # Если задано, вход в текущую стадию разрешён только командам,
   # которые победили в предыдущей стадии.
   previous_stage: ""
@@ -47,6 +63,14 @@ tournament:
   # Если false, часть проверок может выполняться на join (когда доступна связь nickname->uuid).
   prelogin:
     strict: true
+  post_match:
+    # Задержка (тики) перед enforcement/kick после записи результата.
+    # Нужна, чтобы режим успел завершить ENDING/CLEANUP и телепортировать игроков.
+    enforce_delay_ticks: 40
+    # Кикнуть участников матча после записи результата (standard mode).
+    kick_participants: true
+    kick_delay_ticks: 0
+
   bypass:
     # Пермишен для bypass внутри сервера (join/checks). На prelogin его нет.
     permission: "minigamesapi.tournament.bypass"

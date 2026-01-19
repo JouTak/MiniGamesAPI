@@ -1,6 +1,9 @@
 package ru.joutak.minigames.config
 
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.ClickEvent
+import net.kyori.adventure.text.event.HoverEvent
+import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.ChatColor
 import org.bukkit.configuration.file.YamlConfiguration
@@ -37,6 +40,32 @@ object Messages {
         val msg = formatRaw(path, placeholders) ?: return Component.empty()
         val prefix = formatRaw("messages.prefix", placeholders) ?: ""
         return amp.deserialize(prefix + msg)
+    }
+
+    fun prefixed(component: Component, placeholders: Map<String, String> = emptyMap()): Component {
+        val prefix = formatRaw("messages.prefix", placeholders) ?: ""
+        return amp.deserialize(prefix).append(component)
+    }
+
+    fun feedbackFormComponent(): Component {
+        val url = getString("messages.common.feedback_form.url")?.trim()
+            ?: "https://forms.yandex.ru/u/6920183d068ff00fd171bb4a"
+
+        val textRaw = getString("messages.common.feedback_form.text")
+            ?: "&7Пожалуйста, заполните форму обратной связи: "
+        val suffixRaw = getString("messages.common.feedback_form.suffix")
+            ?: "&7 (кликни)"
+
+        val text = amp.deserialize(textRaw)
+        val suffix = amp.deserialize(suffixRaw)
+            .clickEvent(ClickEvent.openUrl(url))
+
+        val link = Component.text(url)
+            .color(NamedTextColor.AQUA)
+            .clickEvent(ClickEvent.openUrl(url))
+            .hoverEvent(HoverEvent.showText(Component.text("Открыть форму").color(NamedTextColor.GRAY)))
+
+        return text.append(link).append(suffix)
     }
 
     fun component(path: String, placeholders: Map<String, String> = emptyMap()): Component {

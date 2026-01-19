@@ -176,7 +176,7 @@ object LobbyScoreboardManager {
             } else {
                 Messages.getString("ui.lobby.scoreboard.tournament.forceready_off") ?: "&cOFF"
             }
-            val attempts = info.attemptsLeft?.toString() ?: "?"
+            val attempts = if (TournamentManager.isEloTournamentMode()) "∞" else (info.attemptsLeft?.toString() ?: "?")
 
             val tp = mapOf(
                 "team_key" to myTeamKey,

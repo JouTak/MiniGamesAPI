@@ -256,6 +256,33 @@ class JdbcTournamentStorage(
         return getProgress(eventId, stage, teamKey)
     }
 
+
+    override fun ensureMinAttempts(eventId: String, stage: String, teamKey: String, minAttempts: Int): TournamentTeamProgress? {
+        if (minAttempts <= 0) return getProgress(eventId, stage, teamKey)
+
+        val now = System.currentTimeMillis()
+        openConnection().use { conn ->
+            conn.prepareStatement(
+                """
+                UPDATE tournament_team_progress
+                SET attempts_left = CASE WHEN attempts_left < ? THEN ? ELSE attempts_left END,
+                    updated_at_ms = ?
+                WHERE event_id = ? AND stage = ? AND team_key = ?
+                """.trimIndent()
+            ).use { ps ->
+                ps.setInt(1, minAttempts)
+                ps.setInt(2, minAttempts)
+                ps.setLong(3, now)
+                ps.setString(4, eventId)
+                ps.setString(5, stage)
+                ps.setString(6, teamKey)
+                ps.executeUpdate()
+            }
+        }
+
+        return getProgress(eventId, stage, teamKey)
+    }
+
     override fun setWon(eventId: String, stage: String, teamKey: String, won: Boolean) {
         val now = System.currentTimeMillis()
         openConnection().use { conn ->

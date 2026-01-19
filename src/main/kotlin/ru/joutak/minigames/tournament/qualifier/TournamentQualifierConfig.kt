@@ -13,6 +13,11 @@ data class TournamentQualifierConfig(
     val eloScale: Int,
     val paintPercentKey: String,
     val allowFallbackToScore: Boolean,
+    /**
+     * Allows qualifier recalc to consider matches with a single team (e.g. admin test runs).
+     * Elo delta for such matches will be 0.0 (no opponents), but stats/match count will be recorded.
+     */
+    val allowSingleTeamMatches: Boolean,
     val paintPercentFormat: PaintPercentFormat,
     val lockingMode: LockingMode,
     val locked: Boolean,
@@ -72,6 +77,7 @@ data class TournamentQualifierConfig(
             eloScale = 400,
             paintPercentKey = "paint_percent",
             allowFallbackToScore = false,
+            allowSingleTeamMatches = false,
             paintPercentFormat = PaintPercentFormat.ZERO_TO_100,
             lockingMode = LockingMode.TIMESTAMP,
             locked = false,
@@ -100,6 +106,7 @@ data class TournamentQualifierConfig(
 
             val paintKey = yaml.getString("data.paint_percent_key")?.trim().orEmpty()
             val allowFallback = yaml.getBoolean("data.allow_fallback_to_score", DEFAULT.allowFallbackToScore)
+            val allowSingleTeam = yaml.getBoolean("data.allow_single_team_matches", DEFAULT.allowSingleTeamMatches)
             val paintFmt = PaintPercentFormat.fromConfig(yaml.getString("data.paint_percent_format"))
 
             val lockMode = LockingMode.fromConfig(yaml.getString("locking.mode"))
@@ -130,6 +137,7 @@ data class TournamentQualifierConfig(
                 eloScale = scale,
                 paintPercentKey = if (paintKey.isNotBlank()) paintKey else DEFAULT.paintPercentKey,
                 allowFallbackToScore = allowFallback,
+                allowSingleTeamMatches = allowSingleTeam,
                 paintPercentFormat = paintFmt,
                 lockingMode = lockMode,
                 locked = locked,

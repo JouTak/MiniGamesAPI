@@ -10,12 +10,14 @@ import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.advance.TournamentAdvanceManager
+import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
 import ru.joutak.minigames.tournament.model.TournamentGateResult
 import ru.joutak.minigames.tournament.model.TournamentTeamCaptain
 import ru.joutak.minigames.tournament.model.TournamentTeamProgress
 import ru.joutak.minigames.tournament.storage.JdbcTournamentStorage
 import ru.joutak.minigames.tournament.storage.TournamentStorage
+import kotlin.math.max
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -102,6 +104,49 @@ object TournamentManager {
 
     @Volatile
     private var bypassUuids: Set<UUID> = emptySet()
+
+
+    enum class TournamentProgressMode {
+        STANDARD,
+        ELO,
+    }
+
+    private fun getTournamentProgressMode(): TournamentProgressMode {
+        val raw = try {
+            configuration.get(ConfigKeys.TOURNAMENT_MODE).trim().lowercase()
+        } catch (_: Throwable) {
+            "standard"
+        }
+
+        return when {
+            raw == "standard" || raw == "elimination" -> TournamentProgressMode.STANDARD
+            raw == "elo" || raw == "qualifier" || raw == "rating" -> TournamentProgressMode.ELO
+            raw.contains("elo") || raw.contains("qual") || raw.contains("rating") -> TournamentProgressMode.ELO
+            else -> TournamentProgressMode.STANDARD
+        }
+    }
+
+    fun isEloTournamentMode(): Boolean {
+        if (!enabled) return false
+        return getTournamentProgressMode() == TournamentProgressMode.ELO
+    }
+
+
+    fun isPostMatchKickParticipantsEnabled(): Boolean {
+        if (!enabled) return false
+        return when (getTournamentProgressMode()) {
+            TournamentProgressMode.ELO -> configuration.get(ConfigKeys.TOURNAMENT_ELO_POST_MATCH_KICK_PARTICIPANTS)
+            TournamentProgressMode.STANDARD -> configuration.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_PARTICIPANTS)
+        }
+    }
+
+    fun getPostMatchKickDelayTicks(): Int {
+        if (!enabled) return 0
+        return when (getTournamentProgressMode()) {
+            TournamentProgressMode.ELO -> configuration.get(ConfigKeys.TOURNAMENT_ELO_POST_MATCH_KICK_DELAY_TICKS)
+            TournamentProgressMode.STANDARD -> configuration.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_DELAY_TICKS)
+        }
+    }
 
     fun initialize(
         plugin: JavaPlugin,
@@ -270,9 +315,42 @@ object TournamentManager {
 
                 if (teamKeyByTeamId.isEmpty()) return@supplyAsync false
 
-                // Decrement attempts for all participating teams.
                 val participating = teamKeyByTeamId.values.toSet()
                 val cacheNow = System.currentTimeMillis()
+
+                if (getTournamentProgressMode() == TournamentProgressMode.ELO) {
+                    val minAttempts = configuration.get(ConfigKeys.TOURNAMENT_ELO_MIN_ATTEMPTS)
+                    val baseAttempts = max(defaultAttempts, minAttempts)
+
+                    for (teamKey in participating) {
+                        s.getOrCreateProgress(eventId, stage, teamKey, baseAttempts)
+                        val updated = try {
+                            s.ensureMinAttempts(eventId, stage, teamKey, minAttempts)
+                        } catch (_: Throwable) {
+                            s.getProgress(eventId, stage, teamKey)
+                        }
+
+                        if (updated != null) {
+                            val c = teamUiCache[teamKey]
+                            if (c != null) {
+                                c.attemptsLeft = updated.attemptsLeft
+                                c.won = updated.won
+                                c.lastFetchMs = cacheNow
+                            }
+                        }
+
+                        // forceReady should not be sticky between matches
+                        forceReadyTeams.remove("$eventId|$teamKey")
+                    }
+
+                    if (configuration.get(ConfigKeys.TOURNAMENT_ELO_AUTO_RECALC)) {
+                        TournamentQualifierManager.recalcAsync()
+                    }
+
+                    return@supplyAsync true
+                }
+
+                // Standard: decrement attempts for all participating teams.
                 val becameIneligible = HashMap<String, TournamentDenyReason>()
                 for (teamKey in participating) {
                     s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts)
@@ -656,6 +734,13 @@ object TournamentManager {
         if (!enabled) return true
         if (teamKey.isBlank()) return false
 
+
+        if (isEloTournamentMode()) {
+            // Elo tournament doesn't exclude teams by attempts/win state.
+            scheduleTeamUiRefresh(teamKey)
+            return true
+        }
+
         val c = teamUiCache[teamKey]
         if (c == null) {
             // Try to refresh asynchronously, but don't block matchmaking.
@@ -740,7 +825,32 @@ object TournamentManager {
                 return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.NOT_QUALIFIED)
             }
 
-            val progress = s.getOrCreateProgress(eventId, stage, teamKey, defaultAttempts)
+            val mode = getTournamentProgressMode()
+            val minAttempts = if (mode == TournamentProgressMode.ELO) {
+                configuration.get(ConfigKeys.TOURNAMENT_ELO_MIN_ATTEMPTS)
+            } else {
+                0
+            }
+            val baseAttempts = if (mode == TournamentProgressMode.ELO) {
+                max(defaultAttempts, minAttempts)
+            } else {
+                defaultAttempts
+            }
+
+            val progress = s.getOrCreateProgress(eventId, stage, teamKey, baseAttempts)
+
+            if (mode == TournamentProgressMode.ELO) {
+                if (progress.attemptsLeft < minAttempts) {
+                    try {
+                        s.ensureMinAttempts(eventId, stage, teamKey, minAttempts)
+                    } catch (_: Throwable) {
+                        // ignore
+                    }
+                }
+                // Ensure UI/scoreboard gets a chance to refresh soon.
+                scheduleTeamUiRefresh(teamKey)
+                return TournamentGateResult(true, teamKey = teamKey)
+            }
 
             if (progress.won) {
                 return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.WINNER)

@@ -169,6 +169,7 @@ object MiniGamesCore {
 
         // v2 migration: unify mode naming, add display name, drop old spartakiad.minigame_name.
         migrateApiConfigV2(configPath)
+        migrateApiConfigV3(configPath)
 
         plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
 
@@ -253,6 +254,56 @@ object MiniGamesCore {
         }
     }
 
+
+    private fun migrateApiConfigV3(configPath: Path) {
+        try {
+            val file = configPath.toFile()
+            if (!file.exists()) return
+            val yaml = YamlConfiguration.loadConfiguration(file)
+
+            val version = yaml.getInt("minigamesapi.config_version", 1)
+
+            if (!yaml.contains("tournament.mode")) {
+                yaml.set("tournament.mode", "standard")
+            }
+
+            if (!yaml.contains("tournament.elo.min_attempts")) {
+                yaml.set("tournament.elo.min_attempts", 3)
+            }
+
+            if (!yaml.contains("tournament.elo.auto_recalc")) {
+                yaml.set("tournament.elo.auto_recalc", true)
+            }
+
+            if (!yaml.contains("tournament.elo.post_match.kick_participants")) {
+                yaml.set("tournament.elo.post_match.kick_participants", false)
+            }
+
+            if (!yaml.contains("tournament.elo.post_match.kick_delay_ticks")) {
+                yaml.set("tournament.elo.post_match.kick_delay_ticks", 0)
+            }
+
+            // Add missing post-match keys so admins can see/tune them.
+            if (!yaml.contains("tournament.post_match.enforce_delay_ticks")) {
+                yaml.set("tournament.post_match.enforce_delay_ticks", 40)
+            }
+            if (!yaml.contains("tournament.post_match.kick_participants")) {
+                yaml.set("tournament.post_match.kick_participants", true)
+            }
+            if (!yaml.contains("tournament.post_match.kick_delay_ticks")) {
+                yaml.set("tournament.post_match.kick_delay_ticks", 0)
+            }
+
+            if (version < 3) {
+                yaml.set("minigamesapi.config_version", 3)
+            }
+
+            yaml.save(file)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to migrate MiniGamesAPI config to v3: ${t.message}")
+        }
+    }
+
     private fun ensureMessagesConfig(configPath: Path) {
         val messagesPath = apiDataPath.resolve("messages.yml")
 
@@ -316,13 +367,24 @@ object MiniGamesCore {
             }
         }
 
-        // Ensure new message keys exist in existing installations (best-effort).
+        // Soft migration for messages.yml: add missing keys from defaults, without overwriting existing.
         try {
             val msgFile = messagesPath.toFile()
             if (msgFile.exists()) {
                 val msg = YamlConfiguration.loadConfiguration(msgFile)
-                if (!msg.contains("messages.tournament.team_full_online")) {
-                    msg.set("messages.tournament.team_full_online", "&cНа этом сервере уже максимум игроков из вашей команды. Подождите, пока кто-то выйдет.")
+                val defaults = YamlConfiguration()
+                defaults.loadFromString(DEFAULT_MESSAGES_CONFIG)
+
+                var changed = false
+                for (k in defaults.getKeys(true)) {
+                    if (defaults.isConfigurationSection(k)) continue
+                    if (!msg.contains(k)) {
+                        msg.set(k, defaults.get(k))
+                        changed = true
+                    }
+                }
+
+                if (changed) {
                     msg.save(msgFile)
                 }
             }
@@ -538,7 +600,7 @@ object MiniGamesCore {
     private const val DEFAULT_API_CONFIG: String = """
 minigamesapi:
   # Service marker to distinguish API config from mode configs.
-  config_version: 2
+  config_version: 3
 
 mode:
   # Short logical key used for DB (mode_key) and internal identifiers.
@@ -557,6 +619,14 @@ storage:
 
 tournament:
   enabled: false
+  # standard: "до победного" (attempts/win); elo: бесконечный режим под Elo квалификацию
+  mode: "standard"
+  elo:
+    min_attempts: 3
+    auto_recalc: true
+    post_match:
+      kick_participants: false
+      kick_delay_ticks: 0
   max_online_per_team: 4
   event_id: "tournament"
   stage: "round1"
@@ -564,9 +634,14 @@ tournament:
   default_attempts: 1
   prelogin:
     strict: true
+  post_match:
+    enforce_delay_ticks: 40
+    kick_participants: true
+    kick_delay_ticks: 0
   bypass:
     permission: "minigamesapi.tournament.bypass"
     uuids: []
+
 
 matchmaking:
   start:
@@ -634,6 +709,7 @@ messages:
   join:
     help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
     help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby"
+    help_tournament_elo: "&7Квалификация (ELO): команды назначаются организаторами. Матчи собираются автоматически, попытки не ограничены (минимум 3). Команды: &e/forceready&7, &c/unready&7, &e/lobby"
 
   lobby:
     command_unavailable: "&cКоманда недоступна."

@@ -13,6 +13,7 @@ messages:
   join:
     help: '&7Команды: &a/ready&7, &b/teamselect&7, &c/unready'
     help_tournament: '&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
+    help_tournament_elo: '&7Квалификация Elo: играйте сколько угодно. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
 
   lobby:
     command_unavailable: '&cКоманда недоступна.'

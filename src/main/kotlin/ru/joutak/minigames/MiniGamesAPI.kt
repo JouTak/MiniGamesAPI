@@ -38,7 +38,7 @@ object MiniGamesAPI {
         // IMPORTANT: modes are responsible for any post-game ceremony/teleports.
         val tournamentFuture = TournamentManager.applyMatchResult(result)
 
-        if (TournamentManager.isEnabled() && config.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_PARTICIPANTS)) {
+        if (TournamentManager.isEnabled() && TournamentManager.isPostMatchKickParticipantsEnabled()) {
             tournamentFuture.thenAccept { ok ->
                 if (ok) {
                     scheduleKickMatchParticipants(result)
@@ -52,7 +52,7 @@ object MiniGamesAPI {
     fun isTournamentEnabled(): Boolean = TournamentManager.isEnabled()
 
     private fun scheduleKickMatchParticipants(result: MatchResult) {
-        val delay = config.get(ConfigKeys.TOURNAMENT_POST_MATCH_KICK_DELAY_TICKS).toLong().coerceAtLeast(0L)
+        val delay = TournamentManager.getPostMatchKickDelayTicks().toLong().coerceAtLeast(0L)
         val bypassPerm = config.get(ConfigKeys.TOURNAMENT_BYPASS_PERMISSION)
 
         Bukkit.getScheduler().runTaskLater(plugin, Runnable {

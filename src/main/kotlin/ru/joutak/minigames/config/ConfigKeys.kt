@@ -35,6 +35,47 @@ object ConfigKeys {
     val TOURNAMENT_STAGE = object : ConfigKey<String>("tournament.stage", "round1") {}
 
     /**
+     * Tournament progress mode.
+     *
+     * - "standard" (default): attempts decrease for each match; winner is marked as won and excluded.
+     * - "elo": tournament gate + matchmaking remain, but attempts/win progress is NOT applied.
+     *         Intended for Elo-based qualifier stages (unlimited matches).
+     */
+    val TOURNAMENT_MODE = object : ConfigKey<String>("tournament.mode", "standard") {}
+
+    /**
+     * Elo-mode helper: ensure teams have at least this many attempts_left in DB (compat/UI),
+     * while still allowing unlimited matches.
+     */
+    val TOURNAMENT_ELO_MIN_ATTEMPTS = object : ConfigKey<Int>("tournament.elo.min_attempts", 3) {
+        override fun validate(value: Int) {
+            require(value >= 0) { "tournament.elo.min_attempts must be >= 0" }
+        }
+    }
+
+    /**
+     * If true, qualifier Elo recalculation is triggered automatically after each recorded match
+     * while tournament.mode == "elo".
+     */
+    val TOURNAMENT_ELO_AUTO_RECALC = object : ConfigKey<Boolean>("tournament.elo.auto_recalc", true) {}
+
+    /**
+     * If true, match participants are kicked after a recorded match in Elo tournament mode.
+     * Default: false (qualifier usually runs continuously without reconnects).
+     */
+    val TOURNAMENT_ELO_POST_MATCH_KICK_PARTICIPANTS = object : ConfigKey<Boolean>("tournament.elo.post_match.kick_participants", false) {}
+
+    /**
+     * Delay (ticks) before kicking match participants after Elo-mode progress update.
+     */
+    val TOURNAMENT_ELO_POST_MATCH_KICK_DELAY_TICKS = object : ConfigKey<Int>("tournament.elo.post_match.kick_delay_ticks", 0) {
+        override fun validate(value: Int) {
+            require(value >= 0) { "tournament.elo.post_match.kick_delay_ticks must be >= 0" }
+        }
+    }
+
+
+    /**
      * If set, only teams who WON the previous stage can participate in the current stage.
      * Example: current "round2" requires previous "round1".
      */

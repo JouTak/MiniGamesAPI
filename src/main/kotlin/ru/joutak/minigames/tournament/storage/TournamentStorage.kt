@@ -35,6 +35,15 @@ interface TournamentStorage {
     fun decrementAttempts(eventId: String, stage: String, teamKey: String, delta: Int = 1): TournamentTeamProgress?
 
     /**
+     * Ensures attempts_left is at least [minAttempts] (best-effort), returning updated progress.
+     *
+     * Used by "elo" tournament mode to keep legacy attempts UI stable while allowing unlimited matches.
+     */
+    fun ensureMinAttempts(eventId: String, stage: String, teamKey: String, minAttempts: Int): TournamentTeamProgress? {
+        return getProgress(eventId, stage, teamKey)
+    }
+
+    /**
      * Marks the team progress as won/lost for a stage.
      */
     fun setWon(eventId: String, stage: String, teamKey: String, won: Boolean)

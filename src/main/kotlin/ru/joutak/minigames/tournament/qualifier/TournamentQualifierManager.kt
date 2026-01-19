@@ -396,6 +396,7 @@ object TournamentQualifierManager {
         private val kStable = cfg.eloKStable.toDouble().coerceAtLeast(0.0)
 
         private val allowFallbackToScore = cfg.allowFallbackToScore
+        private val allowSingleTeamMatches = cfg.allowSingleTeamMatches
         private val paintKey = cfg.paintPercentKey.trim().ifBlank { "paint_percent" }
         private val format = cfg.paintPercentFormat
 
@@ -432,7 +433,7 @@ object TournamentQualifierManager {
                 teams.add(MatchTeamInput(teamKey, paint0100.coerceIn(0.0, 100.0)))
             }
 
-            if (teams.size < 2) {
+            if (teams.size < 2 && !(teams.size == 1 && allowSingleTeamMatches)) {
                 val reason = if (!hadAnyTeam || snapshot.teams.size < 2) {
                     "<2 teams"
                 } else {
