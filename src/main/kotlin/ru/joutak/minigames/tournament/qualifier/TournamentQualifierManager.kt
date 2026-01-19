@@ -4,6 +4,9 @@ import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.plugin.java.JavaPlugin
+import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.config.ConfigKeys
+import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchTeamsSnapshot
 import ru.joutak.minigames.results.model.Metric
@@ -24,6 +27,27 @@ import kotlin.math.round
 object TournamentQualifierManager {
 
     private const val TEAM_KEY_METRIC_KEY = "team_key"
+
+    private data class EffectiveContext(val eventId: String, val stage: String, val overridden: Boolean)
+
+    private fun resolveEffectiveContext(cfg: TournamentQualifierConfig): EffectiveContext {
+        var eventId = cfg.eventId.trim()
+        var stage = cfg.stage.trim()
+        var overridden = false
+
+        if (TournamentManager.isEloTournamentMode()) {
+            val tEvent = runCatching { MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID) }.getOrNull()?.trim().orEmpty()
+            val tStage = runCatching { MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_STAGE) }.getOrNull()?.trim().orEmpty()
+            if (tEvent.isNotBlank() && tStage.isNotBlank()) {
+                overridden = (eventId != tEvent || stage != tStage)
+                eventId = tEvent
+                stage = tStage
+            }
+        }
+
+        return EffectiveContext(eventId, stage, overridden)
+    }
+
 
     @Volatile
     private var initialized: Boolean = false
@@ -141,8 +165,9 @@ object TournamentQualifierManager {
         return CompletableFuture.supplyAsync({
             try {
                 val cfg = config
-                val eventId = cfg.eventId.trim()
-                val stage = cfg.stage.trim()
+                val ctx = resolveEffectiveContext(cfg)
+                val eventId = ctx.eventId.trim()
+                val stage = ctx.stage.trim()
                 if (eventId.isBlank() || stage.isBlank()) {
                     lastError = "event_id/stage is blank"
                     return@supplyAsync null
@@ -332,6 +357,13 @@ object TournamentQualifierManager {
         lines.add(Component.text("file: ${file.path}", NamedTextColor.GRAY))
         lines.add(Component.text("event_id: ${cfg.eventId}", NamedTextColor.WHITE))
         lines.add(Component.text("stage: ${cfg.stage}", NamedTextColor.WHITE))
+
+        val ctx = resolveEffectiveContext(cfg)
+        if (ctx.overridden) {
+            lines.add(Component.text("effective_event_id: ${ctx.eventId}", NamedTextColor.YELLOW))
+            lines.add(Component.text("effective_stage: ${ctx.stage}", NamedTextColor.YELLOW))
+        }
+
         lines.add(Component.text("min_matches: ${cfg.minMatches}", NamedTextColor.WHITE))
         lines.add(
             Component.text(

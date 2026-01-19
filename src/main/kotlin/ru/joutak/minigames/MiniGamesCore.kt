@@ -275,6 +275,10 @@ object MiniGamesCore {
                 yaml.set("tournament.elo.auto_recalc", true)
             }
 
+            if (!yaml.contains("tournament.elo.announce_after_match")) {
+                yaml.set("tournament.elo.announce_after_match", true)
+            }
+
             if (!yaml.contains("tournament.elo.post_match.kick_participants")) {
                 yaml.set("tournament.elo.post_match.kick_participants", false)
             }

@@ -60,6 +60,11 @@ object ConfigKeys {
     val TOURNAMENT_ELO_AUTO_RECALC = object : ConfigKey<Boolean>("tournament.elo.auto_recalc", true) {}
 
     /**
+     * If true, announce Elo rating update to match participants after auto recalc in Elo tournament mode.
+     */
+    val TOURNAMENT_ELO_ANNOUNCE_AFTER_MATCH = object : ConfigKey<Boolean>("tournament.elo.announce_after_match", true) {}
+
+    /**
      * If true, match participants are kicked after a recorded match in Elo tournament mode.
      * Default: false (qualifier usually runs continuously without reconnects).
      */

@@ -343,8 +343,16 @@ object TournamentManager {
                         forceReadyTeams.remove("$eventId|$teamKey")
                     }
 
-                    if (configuration.get(ConfigKeys.TOURNAMENT_ELO_AUTO_RECALC)) {
-                        TournamentQualifierManager.recalcAsync()
+                    val autoRecalc = configuration.get(ConfigKeys.TOURNAMENT_ELO_AUTO_RECALC)
+                    val announce = configuration.get(ConfigKeys.TOURNAMENT_ELO_ANNOUNCE_AFTER_MATCH)
+
+                    if (autoRecalc && TournamentQualifierManager.isInitialized()) {
+                        val teamKeyByTeamIdSnapshot = teamKeyByTeamId.toMap()
+                        TournamentQualifierManager.recalcAsync().thenAccept {
+                            if (announce) {
+                                announceEloAfterMatch(result, teamKeyByTeamIdSnapshot)
+                            }
+                        }
                     }
 
                     return@supplyAsync true
@@ -921,6 +929,71 @@ object TournamentManager {
                 player.kick(denyKickMessageComponent(reason))
             }
         }
+    }
+
+    private fun announceEloAfterMatch(result: ru.joutak.minigames.results.model.MatchResult, teamKeyByTeamId: Map<Int, String>) {
+        if (!enabled) return
+        if (getTournamentProgressMode() != TournamentProgressMode.ELO) return
+        if (!TournamentQualifierManager.isInitialized()) return
+
+        val entry = TournamentQualifierManager.getLastAudit().firstOrNull { it.matchId == result.matchId }
+        val teamAudits = entry?.teams?.associateBy { it.teamKey } ?: emptyMap()
+        val skippedReason = if (entry == null) {
+            "нет записи аудита (recalc не включил этот матч — проверь event_id/stage и team_metrics)"
+        } else if (entry.skipped) {
+            entry.skippedReason ?: "skipped"
+        } else {
+            null
+        }
+
+        Bukkit.getScheduler().runTask(plugin, Runnable {
+            for (pr in result.players) {
+                val uuid = pr.playerUuid
+                val player = Bukkit.getPlayer(uuid) ?: continue
+                if (!player.isOnline) continue
+
+                val tid = pr.teamId ?: continue
+                val teamKey = teamKeyByTeamId[tid]?.trim().orEmpty()
+                if (teamKey.isBlank()) continue
+
+                if (skippedReason != null) {
+                    player.sendMessage(
+                        Messages.prefixedComponent(
+                            "messages.tournament.elo_rating_update_skipped",
+                            mapOf("reason" to skippedReason)
+                        )
+                    )
+                    continue
+                }
+
+                val ta = teamAudits[teamKey] ?: continue
+
+                val placeholders = mapOf(
+                    "team_key" to teamKey,
+                    "rating" to formatInt(ta.ratingAfter),
+                    "delta" to formatSignedInt(ta.delta),
+                    "place" to ta.place.toString(),
+                    "paint_percent" to formatPercent(ta.paintPercent)
+                )
+
+                player.sendMessage(Messages.prefixedComponent("messages.tournament.elo_rating_update", placeholders))
+            }
+        })
+    }
+
+    private fun formatInt(v: Double): String {
+        val r = kotlin.math.round(v).toInt()
+        return r.toString()
+    }
+
+    private fun formatSignedInt(v: Double): String {
+        val r = kotlin.math.round(v).toInt()
+        return if (r >= 0) "+$r" else r.toString()
+    }
+
+    private fun formatPercent(v: Double): String {
+        val r = kotlin.math.round(v * 10.0) / 10.0
+        return if (r == kotlin.math.round(r)) r.toInt().toString() else r.toString()
     }
 
     private fun parseBypassUuids(list: List<String>): Set<UUID> {

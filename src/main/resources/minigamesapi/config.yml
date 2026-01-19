@@ -43,6 +43,8 @@ tournament:
     min_attempts: 3
     # Автоматически триггерить /tournament qualifier recalc после каждого матча
     auto_recalc: true
+    # Писать участникам матча обновление Elo в чат (после auto_recalc).
+    announce_after_match: true
     post_match:
       # В Elo-квалификации обычно не нужно кикать игроков после каждого матча.
       kick_participants: false
