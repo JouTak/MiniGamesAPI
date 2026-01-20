@@ -53,7 +53,7 @@ object TeamSelectCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
         }
 
         val instance = existingWaitingInstance
-            ?: MatchmakingManager.getActiveInstances().firstOrNull { !it.started && !it.isFull() }
+            ?: MatchmakingManager.pickWaitingInstanceForJoin()
 
         if (instance == null) {
             player.sendMessage(Component.text("Нет свободных арен. Ожидайте.", NamedTextColor.YELLOW))

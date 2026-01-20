@@ -54,7 +54,7 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
             return false
         }
 
-        val instance = MatchmakingManager.getActiveInstances().firstOrNull { !it.started && !it.isFull() }
+        val instance = MatchmakingManager.pickWaitingInstanceForJoin()
         if (instance == null) {
             player.sendMessage(Component.text("Нет свободных арен. Ожидайте.", NamedTextColor.YELLOW))
             return false

@@ -100,10 +100,36 @@ object MatchmakingManager {
     }
 
     fun addPlayer(player: Player) {
-        val instance = activeInstances.firstOrNull { !it.started && !it.isFull() } ?: return
+        val instance = pickWaitingInstanceForJoin() ?: return
         if (instance.addPlayer(player)) {
             checkReady(instance)
         }
+    }
+
+    /**
+     * Non-tournament matchmaking: avoid splitting players into "parallel queues" when the pool contains
+     * multiple waiting instances.
+     *
+     * Example of the bug we want to prevent:
+     * - instance A was running a match and becomes available again (empty)
+     * - players were already waiting in instance B
+     * - new players join and get assigned to instance A (because it is "first"), effectively creating two queues
+     *   that don't see each other in teamselect/scoreboard.
+     *
+     * Strategy: prefer the most populated waiting instance that still has free slots.
+     */
+    fun pickWaitingInstanceForJoin(): GameInstance? {
+        // Tournament mode has its own assignment logic.
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            return activeInstances.firstOrNull { !it.started && !it.isFull() }
+        }
+
+        val candidates = activeInstances.filter { !it.started && !it.isFull() }
+        if (candidates.isEmpty()) return null
+
+        val withPlayers = candidates.filter { inst -> inst.teams.sumOf { it.size } > 0 }
+        return (withPlayers.maxByOrNull { inst -> inst.teams.sumOf { it.size } }
+            ?: candidates.firstOrNull())
     }
 
     /**
