@@ -11,6 +11,7 @@ import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.ResultsConfig
 import ru.joutak.minigames.tournament.advance.TournamentAdvanceManager
+import ru.joutak.minigames.tournament.plan.TournamentMatchPlanManager
 import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
 import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import ru.joutak.minigames.tournament.model.TournamentDenyReason
@@ -969,6 +970,15 @@ object TournamentManager {
             }
 
             val mode = getTournamentProgressMode()
+
+            // Optional hardcoded match plan (standard mode only): if present for this stage,
+            // only teams from ACTIVE planned matches are allowed to participate.
+            if (mode == TournamentProgressMode.STANDARD) {
+                val allowedByPlan = TournamentMatchPlanManager.isTeamAllowed(plugin, eventId, stage, teamKey)
+                if (allowedByPlan == false) {
+                    return TournamentGateResult(false, teamKey = teamKey, denyReason = TournamentDenyReason.NOT_QUALIFIED)
+                }
+            }
             val minAttempts = if (mode == TournamentProgressMode.ELO) {
                 configuration.get(ConfigKeys.TOURNAMENT_ELO_MIN_ATTEMPTS)
             } else {

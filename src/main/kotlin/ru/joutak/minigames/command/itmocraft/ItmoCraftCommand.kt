@@ -13,10 +13,13 @@ import org.bukkit.Bukkit
 import org.bukkit.command.CommandSender
 import org.bukkit.entity.Player
 import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.command.PluginCommand
+import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.tournament.advance.TournamentAdvanceManager
 import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
+import ru.joutak.minigames.tournament.plan.TournamentMatchPlanManager
 import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
 import java.io.File
 
@@ -48,6 +51,7 @@ object ItmoCraftCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStac
             .then(buildQualifierNode().requires { it.sender.hasPermission(adminPerm) })
             .then(buildExportNode().requires { it.sender.hasPermission(adminPerm) })
             .then(buildRosterNode().requires { it.sender.hasPermission(adminPerm) })
+            .then(buildPlanNode(plugin).requires { it.sender.hasPermission(adminPerm) })
             .then(buildSeedNode(plugin).requires { it.sender.hasPermission(adminPerm) })
             .then(buildAdvanceNode(plugin).requires { it.sender.hasPermission(adminPerm) })
     }
@@ -273,6 +277,78 @@ object ItmoCraftCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStac
                             if (res.ok) Component.text("Exported audit to ${res.path}", NamedTextColor.GREEN)
                             else Component.text("Export failed: ${res.message}", NamedTextColor.RED)
                         )
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+    }
+
+    private fun buildPlanNode(plugin: org.bukkit.plugin.java.JavaPlugin): LiteralArgumentBuilder<CommandSourceStack> {
+        return Commands.literal("plan")
+            .then(
+                Commands.literal("status")
+                    .executes { ctx ->
+                        val eventId = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
+                        val stage = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_STAGE).trim()
+                        val plan = TournamentMatchPlanManager.getApplicable(plugin, eventId, stage)
+
+                        if (plan == null) {
+                            val path = File(plugin.dataFolder, "minigamesapi/match_plan.yml").path
+                            send(ctx.source.sender, Component.text("No match_plan.yml for event='$eventId' stage='$stage' ($path)", NamedTextColor.DARK_GRAY))
+                            return@executes Command.SINGLE_SUCCESS
+                        }
+
+                        send(
+                            ctx.source.sender,
+                            Component.text(
+                                "Match plan: event=${plan.eventId} stage=${plan.stage} matches=${plan.matches.size} generated_at=${plan.generatedAtMs} " +
+                                    "| serial=${plan.serial} partial=${plan.allowPartialStart} minTeams=${plan.minTeamsToStart}",
+                                NamedTextColor.GREEN,
+                            )
+                        )
+
+                        for (m in plan.matches.take(20)) {
+                            val teams = if (m.teams.isEmpty()) "<empty>" else m.teams.joinToString(",") { it ?: "~" }
+                            val active = if (m.active) "active" else "inactive"
+                            send(ctx.source.sender, Component.text("${m.matchId}: $active | teams=$teams", NamedTextColor.GRAY))
+                        }
+                        if (plan.matches.size > 20) {
+                            send(ctx.source.sender, Component.text("... +${plan.matches.size - 20} more", NamedTextColor.DARK_GRAY))
+                        }
+
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("reload")
+                    .executes { ctx ->
+                        val loaded = TournamentMatchPlanManager.reload(plugin)
+                        if (loaded == null) {
+                            send(ctx.source.sender, Component.text("match_plan.yml is missing or invalid", NamedTextColor.RED))
+                        } else {
+                            send(ctx.source.sender, Component.text("Reloaded match_plan.yml for event=${loaded.eventId} stage=${loaded.stage}", NamedTextColor.GREEN))
+                        }
+
+                        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+                            MatchmakingManager.rebuildTournamentWaitingAssignments()
+                        }
+
+                        Command.SINGLE_SUCCESS
+                    }
+            )
+            .then(
+                Commands.literal("clear")
+                    .executes { ctx ->
+                        val ok = TournamentMatchPlanManager.clear(plugin)
+                        send(
+                            ctx.source.sender,
+                            if (ok) Component.text("match_plan.yml deleted", NamedTextColor.YELLOW)
+                            else Component.text("Failed to delete match_plan.yml", NamedTextColor.RED)
+                        )
+
+                        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+                            MatchmakingManager.rebuildTournamentWaitingAssignments()
+                        }
+
                         Command.SINGLE_SUCCESS
                     }
             )

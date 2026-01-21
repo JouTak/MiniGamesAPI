@@ -15,6 +15,7 @@ import ru.joutak.minigames.ui.QueueBossBarManager
 import ru.joutak.minigames.ui.LobbyScoreboardManager
 import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
+import ru.joutak.minigames.tournament.plan.TournamentMatchPlanManager
 import java.util.ArrayDeque
 import java.util.UUID
 import kotlin.math.ceil
@@ -346,6 +347,95 @@ object MatchmakingManager {
 
         val eventId = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_EVENT_ID).trim()
         val stage = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_STAGE).trim()
+
+        // Optional match plan (standard tournament mode only): if present for this stage,
+        // do NOT auto-pack teams - assign them strictly according to the plan.
+        val plan = if (!TournamentManager.isEloTournamentMode()) {
+            TournamentMatchPlanManager.getApplicable(MiniGamesCore.plugin, eventId, stage)
+        } else {
+            null
+        }
+        if (plan != null) {
+            // Reset only instances we are allowed to rebuild.
+            rebuildInstances.forEach { it.resetTournamentLobbyState() }
+
+            val primaryCfg = rebuildInstances.first().config
+            val teamCount = primaryCfg.teamCount
+            val playersPerTeam = primaryCfg.playersPerTeam
+
+            val matchableInstances = rebuildInstances.filter { it.config.teamCount == teamCount && it.config.playersPerTeam == playersPerTeam }
+            val plannedMatches = plan.matches
+                .filter { it.active }
+                .sortedBy { it.matchId }
+
+            fun isEligibleTeam(teamKey: String): Boolean {
+                val members = byTeam[teamKey] ?: return false
+                val size = members.size
+                if (size >= playersPerTeam) return true
+                if (size > 0 && TournamentManager.isTeamForceReady(teamKey)) return true
+                return false
+            }
+
+            fun assignPlannedMatch(inst: GameInstance, m: TournamentMatchPlanManager.PlannedMatch) {
+                for (teamIndex in 0 until inst.config.teamCount) {
+                    val key = m.teams.getOrNull(teamIndex)
+                    if (key.isNullOrBlank()) {
+                        inst.setTournamentTeamKey(teamIndex, null)
+                        continue
+                    }
+
+                    // Always set slot->team_key mapping (even if team has 0 eligible members online).
+                    inst.setTournamentTeamKey(teamIndex, key)
+
+                    // Only put players into the lobby queue if the team is eligible (full or /forceready).
+                    if (!isEligibleTeam(key)) continue
+
+                    val members = byTeam[key] ?: emptyList()
+                    if (members.isNotEmpty()) {
+                        inst.teams[teamIndex].addAll(members.take(inst.config.playersPerTeam))
+                    }
+                }
+            }
+
+            if (plan.serial) {
+                val minTeams = if (plan.allowPartialStart) {
+                    plan.minTeamsToStart.coerceIn(1, teamCount)
+                } else {
+                    teamCount
+                }
+                val runnable = plannedMatches.firstOrNull { m ->
+                    // If match contains a team that is already in a locked (running/starting) instance - skip.
+                    if (m.teams.any { it != null && lockedTeamKeys.contains(it) }) return@firstOrNull false
+                    val eligibleCount = m.teams.count { it != null && isEligibleTeam(it) }
+                    eligibleCount >= minTeams
+                }
+
+                // Serial mode: expose only ONE planned match in lobby at a time.
+                if (runnable != null && matchableInstances.isNotEmpty()) {
+                    val inst = matchableInstances.first()
+                    assignPlannedMatch(inst, runnable)
+                }
+            } else {
+                // Default: planned matches may run in parallel (old behavior).
+                var idx = 0
+                for (m in plannedMatches) {
+                    if (idx >= matchableInstances.size) break
+                    // If match contains a team that is already in a locked (running/starting) instance - skip.
+                    if (m.teams.any { it != null && lockedTeamKeys.contains(it) }) continue
+
+                    val inst = matchableInstances[idx++]
+                    assignPlannedMatch(inst, m)
+                }
+            }
+
+            // Re-check readiness for ALL waiting instances (locked are not reshuffled, but may change ready state).
+            waitingInstances.forEach { checkReady(it) }
+
+            QueueBossBarManager.updateAll()
+            LobbyScoreboardManager.updateAll()
+            return
+        }
+
         val seedFile = TournamentSeedingManager.getApplicable(MiniGamesCore.plugin, eventId, stage)
         val seedByKey = seedFile?.teams?.associate { it.teamKey to it.seed } ?: emptyMap()
 
