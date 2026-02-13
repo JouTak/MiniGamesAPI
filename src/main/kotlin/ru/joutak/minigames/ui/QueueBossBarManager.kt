@@ -46,7 +46,7 @@ object QueueBossBarManager {
         }
     }
 
-    fun update(player: Player) {
+    fun update(_player: Player) {
         updateAll()
     }
 

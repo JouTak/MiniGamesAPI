@@ -25,9 +25,6 @@ import ru.joutak.minigames.listener.PlayerQuitListener
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
-import ru.joutak.minigames.util.uuid.BukkitUuidResolver
-import ru.joutak.minigames.util.uuid.LibreLoginUuidResolver
-import ru.joutak.minigames.util.uuid.UuidResolver
 import ru.joutak.minigames.ui.LobbyScoreboardManager
 import ru.joutak.minigames.tournament.TournamentManager
 import java.io.File
@@ -47,9 +44,6 @@ object MiniGamesCore {
 
     @Volatile
     private var initialized: Boolean = false
-
-    // Динамически загружаемый LibreLogin
-    private var libreLogin: Any? = null
 
     /** Root folder of the host plugin (mode) data. */
     private val dataPath: Path
@@ -512,45 +506,7 @@ object MiniGamesCore {
     }
 
     private fun loadDependencies() {
-        val useLL = configuration.get(ConfigKeys.USE_LIBRE_LOGIN)
-        plugin.logger.info("LibreLogin enabled in config: $useLL")
-
-        if (!useLL) {
-            plugin.logger.info("LibreLogin disabled. Skipping.")
-            return
-        }
-
-        try {
-            val providerClass = Class.forName("xyz.kyngs.librelogin.api.provider.LibreLoginProvider")
-            val getInstance = providerClass.getMethod("getInstance")
-            val provider = getInstance.invoke(null)
-
-            val getLibreLogin = providerClass.getMethod("getLibreLogin")
-            libreLogin = getLibreLogin.invoke(provider)
-
-            plugin.logger.info("Successfully loaded LibreLogin dynamically: $libreLogin")
-        } catch (_: ClassNotFoundException) {
-            plugin.logger.severe("LibreLogin not found! Disabling LibreLogin integration.")
-            libreLogin = null
-        } catch (t: Throwable) {
-            plugin.logger.severe("Failed to load LibreLogin dynamically: ${t.message}")
-            plugin.logger.fine(t.stackTraceToString())
-            libreLogin = null
-        }
-    }
-
-    private fun tryCreateLibreLoginUuidResolver(libreLoginInstance: Any): UuidResolver? {
-        return try {
-            val libreLoginPluginClass = Class.forName("xyz.kyngs.librelogin.api.LibreLoginPlugin")
-            val ctor = LibreLoginUuidResolver::class.java.getConstructor(libreLoginPluginClass)
-            ctor.newInstance(libreLoginInstance) as UuidResolver
-        } catch (t: Throwable) {
-            plugin.logger.warning(
-                "Failed to create LibreLoginUuidResolver, falling back to Bukkit UUIDs: ${t.javaClass.simpleName}: ${t.message}"
-            )
-            plugin.logger.fine(t.stackTraceToString())
-            null
-        }
+        // Placeholder for future optional dependency loading (e.g. LibreLogin UUID resolver).
     }
 
     private fun registerEvents() {
