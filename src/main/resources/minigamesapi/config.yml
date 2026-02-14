@@ -1,0 +1,153 @@
+minigamesapi:
+  # Служебный маркер, чтобы отличать конфиг API от конфига режима.
+  config_version: 3
+
+mode:
+  # Короткое логическое имя режима (используется как mode_key в results и для кросс-режимной логики).
+  # Примеры: "splatoon", "creakywars", "sp", "cw".
+  name: "minigame"
+  # Человекочитаемое имя для UI/префикса.
+  display_name: "MINIGAME"
+
+uuid:
+  # Использовать LibreLogin UUID (через reflection). Если LibreLogin не установлен — будет fallback на Bukkit UUID.
+  use_libre_login: true
+
+storage:
+  # Дебаунс записи YAML-конфига (мс)
+  debounce_millis: 500
+  # Таймаут graceful-shutdown для фонового writer thread (мс)
+  close_timeout_millis: 5000
+
+
+tournament:
+  # Режим турнира.
+  enabled: false
+
+  # Идентификатор турнира (общий для всех режимов/стадий).
+  # Пример: "season3"
+  event_id: "tournament"
+
+  # Текущая стадия на этом сервере.
+  # Примеры: "round1", "round2", "round3".
+  stage: "round1"
+
+  # Логика прогресса:
+  # - standard: attempts уменьшаются на матч; победитель отмечается won=true и исключается
+  # - elo: турнирный гейт/матчмейкинг остаются, но attempts/won не применяются (бесконечные матчи под Elo)
+  mode: "standard"
+
+  elo:
+    # Чтобы UI не выглядел пустым, в БД обеспечивается минимум attempts_left
+    # (но матчей можно играть сколько угодно).
+    min_attempts: 3
+    # Автоматически триггерить /tournament qualifier recalc после каждого матча
+    auto_recalc: true
+    # Писать участникам матча обновление Elo в чат (после auto_recalc).
+    announce_after_match: true
+    post_match:
+      # В Elo-квалификации обычно не нужно кикать игроков после каждого матча.
+      kick_participants: false
+      kick_delay_ticks: 0
+
+  # Если задано, вход в текущую стадию разрешён только командам,
+  # которые победили в предыдущей стадии.
+  previous_stage: ""
+
+  # Попытки на команду по умолчанию (если прогресс отсутствует в БД).
+  default_attempts: 1
+
+  # Максимум игроков одной турнирной команды онлайн одновременно.
+  # Если команда уже набрала этот лимит на сервере, следующий игрок этой команды не сможет зайти, пока кто-то не выйдет.
+  max_online_per_team: 4
+
+  # Применять турнирный гейт строго в AsyncPlayerPreLoginEvent.
+  # Если false, часть проверок может выполняться на join (когда доступна связь nickname->uuid).
+  prelogin:
+    strict: true
+  post_match:
+    # Задержка (тики) перед enforcement/kick после записи результата.
+    # Нужна, чтобы режим успел завершить ENDING/CLEANUP и телепортировать игроков.
+    enforce_delay_ticks: 40
+    # Кикнуть участников матча после записи результата (standard mode).
+    kick_participants: true
+    kick_delay_ticks: 0
+
+  bypass:
+    # Пермишен для bypass внутри сервера (join/checks). На prelogin его нет.
+    permission: "minigamesapi.tournament.bypass"
+
+    # UUID-list для bypass на prelogin (без прав/пермишенов).
+    uuids: []
+matchmaking:
+  # Сколько одинаковых инстансов держать доступными на одну настройку арены.
+  # Если у режима в конфиге один "map: game", а здесь 3 — можно запустить до 3 параллельных матчей на этой карте.
+  instance_pool_size: 1
+
+  start:
+    # Разрешить старт матча при неполном инстансе, если достигнут порог.
+    # Полный инстанс ВСЕГДА стартует как раньше.
+    enabled: false
+
+    # Минимальная доля заполнения (0.0..1.0) для старта.
+    min_fill_percent: 1.0
+
+    # Минимальное количество непустых команд для старта.
+    min_teams: 2
+
+    # Задержка (сек), в течение которой порог должен удерживаться.
+    # Если игроков/команд стало меньше порога — старт отменяется.
+    delay_seconds: 0
+
+    announce:
+      enabled: true
+      # Как часто писать в чат (сек). В последние last_seconds_always секунд пишет каждый тик.
+      interval_seconds: 5
+      last_seconds_always: 5
+
+lobby:
+  items:
+    enabled: true
+    # Настраиваемые предметы в хотбаре лобби.
+    # Тексты (name/lore/deny_message) — в minigamesapi/messages.yml.
+    hotbar:
+      - id: quick_ready
+        enabled: true
+        slot: 2
+        material: EMERALD
+        action:
+          type: READY
+      - id: team_select
+        enabled: true
+        slot: 4
+        material: NETHER_STAR
+        action:
+          type: TEAM_SELECT
+      - id: lobby_return
+        enabled: true
+        slot: 6
+        material: COMPASS
+        action:
+          type: COMMAND
+          command: "lobby"
+
+teamselect:
+  # Настройки GUI выбора команды (1..16).
+  # Тексты (title и name команд) — в minigamesapi/messages.yml.
+  teams:
+    "1": { material: RED_WOOL, color: RED }
+    "2": { material: YELLOW_WOOL, color: YELLOW }
+    "3": { material: GREEN_WOOL, color: GREEN }
+    "4": { material: BLUE_WOOL, color: BLUE }
+    "5": { material: CYAN_WOOL, color: AQUA }
+    "6": { material: PURPLE_WOOL, color: LIGHT_PURPLE }
+    "7": { material: ORANGE_WOOL, color: GOLD }
+    "8": { material: LIGHT_BLUE_WOOL, color: DARK_AQUA }
+    "9": { material: WHITE_WOOL, color: WHITE }
+    "10": { material: BLACK_WOOL, color: BLACK }
+    "11": { material: MAGENTA_WOOL, color: DARK_PURPLE }
+    "12": { material: LIME_WOOL, color: DARK_GREEN }
+    "13": { material: PINK_WOOL, color: LIGHT_PURPLE }
+    "14": { material: BROWN_WOOL, color: DARK_RED }
+    "15": { material: GRAY_WOOL, color: GRAY }
+    "16": { material: LIGHT_GRAY_WOOL, color: DARK_GRAY }

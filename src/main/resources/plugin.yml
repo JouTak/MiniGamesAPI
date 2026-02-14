@@ -1,12 +1,13 @@
 name: ${NAME}
 version: ${VERSION}
 api-version: ${MINECRAFT_VERSION}
-main: ru.joutak.template.EmptyPlugin
-description: 'A template plugin'
-authors: ['EnderDissa', 'Stunnerer', 's4dnex']
-contributors: ['technosimp']
+main: ru.joutak.minigames.MiniGamesPlugin
+description: 'Плагин для управления мини-играми и проведения турниров на сервере ITMOcraft miniGAMES'
+authors: [ 'EnderDissa', 's4dnex' ]
+contributors: [ 'SumrakBro','acrighthere','Stunnerer' ]
 website: ${WEBSITE}
 
-depend: []
+depend: [ ]
+softdepend: [ 'LibreLogin' ]
 libraries:
   - 'org.jetbrains.kotlin:kotlin-stdlib:${KOTLIN_VERSION}'

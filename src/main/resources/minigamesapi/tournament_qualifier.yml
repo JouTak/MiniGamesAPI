@@ -1,0 +1,42 @@
+event_id: "spartakiad_2026"
+stage: "qualifier_splatoon"
+
+# Команда попадает в таблицу отбора, только если сыграла минимум M матчей.
+min_matches: 3
+
+elo:
+  start_rating: 1000
+  k_placement:
+    # Для первых матчей можно использовать повышенный K, чтобы рейтинг быстрее сходился.
+    provisional_matches: 10
+    k_provisional: 24
+    k_stable: 16
+  scale: 400
+
+data:
+  # Ключ числового поля в TeamResult.metadata, где режим пишет paint_percent.
+  paint_percent_key: "paint_percent"
+  # Если paint_percent не найден — можно (опционально) использовать team.score.
+  allow_fallback_to_score: false
+  # Для админских тестов: разрешить учитывать матчи с 1 командой.
+  # В таких матчах Elo-дельта будет 0.0 (нет оппонентов), но запись попадёт в audit,
+  # а команда появится в /tournament rating ... includeIncomplete.
+  allow_single_team_matches: false
+  # Формат paint_percent: "0_100" (0..100) или "0_1" (0..1)
+  paint_percent_format: "0_100"
+
+locking:
+  # timestamp | match_id
+  mode: "timestamp"
+  locked: false
+  locked_at: 0
+  locked_match_id: ""
+
+advance:
+  # Стадия турнира, которая должна быть ограничена списком advanced_teams.yml
+  # после выполнения /tournament advance ...
+  to_stage: "semifinal_cw"
+  default_thresholds:
+    - { min_teams: 16, take: 16 }
+    - { min_teams: 8,  take: 8  }
+    - { min_teams: 0,  take: 0  } # 0 = take all

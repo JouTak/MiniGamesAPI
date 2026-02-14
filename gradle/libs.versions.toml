@@ -1,12 +1,14 @@
 [versions]
-kotlin = "2.2.0"
+kotlin = "1.9.23"
 jdk = "21"
-paper = "1.21.5-R0.1-SNAPSHOT"
+paper = "1.21.7-R0.1-SNAPSHOT"
 shadow = "9.1.0"
+librelogin = "0.24.0"
 
 [libraries]
 kotlin = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
 paper = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+librelogin = { module = "xyz.kyngs.librelogin:API", version.ref = "librelogin" }
 
 [plugins]
 shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
