@@ -1,10 +1,12 @@
 package ru.joutak.minigames
 
 import org.bukkit.Bukkit
+import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
@@ -84,5 +86,19 @@ object MiniGamesAPI {
         stage: String? = null,
     ): CompletableFuture<List<TopPlayerIntMetric>> {
         return ResultsManager.getTopPlayerIntMetric(modeKey, metricKey, limit, eventId, stage)
+    }
+
+    fun getPlayerTeamInLobby(player: Player): Int? {
+        val uuid = player.uniqueId
+        val instance = MatchmakingManager.getActiveInstances().firstOrNull{
+            !it.started && it.hasWaitingPlayer(uuid)
+        } ?: return null
+
+        for ((teamIndex, teamPlayers) in instance.teams.withIndex()) {
+            if (teamPlayers.any {it.uniqueId == uuid}){
+                return teamIndex
+            }
+        }
+        return null
     }
 }
