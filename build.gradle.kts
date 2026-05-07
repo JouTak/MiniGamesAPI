@@ -34,12 +34,14 @@ repositories {
     maven("https://repo.papermc.io/repository/maven-public/")
     maven("https://oss.sonatype.org/content/groups/public/")
     maven("https://repo.kyngs.xyz/public")
+    maven("https://maven.maxhenkel.de/repository/public")
 }
 
 dependencies {
     compileOnly(libs.kotlin)
     compileOnly(libs.paper)
     compileOnly(libs.librelogin)
+    compileOnly(libs.voicechatApi)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 }
 

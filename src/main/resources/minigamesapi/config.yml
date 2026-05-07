@@ -1,6 +1,6 @@
 minigamesapi:
   # Служебный маркер, чтобы отличать конфиг API от конфига режима.
-  config_version: 3
+  config_version: 4
 
 mode:
   # Короткое логическое имя режима (используется как mode_key в results и для кросс-режимной логики).
@@ -151,3 +151,22 @@ teamselect:
     "14": { material: BROWN_WOOL, color: DARK_RED }
     "15": { material: GRAY_WOOL, color: GRAY }
     "16": { material: LIGHT_GRAY_WOOL, color: DARK_GRAY }
+
+voicechat:
+  # Интеграция с SimpleVoiceChat: на старте матча игроки команды попадают в отдельную голосовую группу.
+  # При отсутствии плагина voicechat на сервере или клиентского мода у игрока — всё работает как обычно.
+  enabled: true
+
+  # Тип группы: NORMAL | OPEN | ISOLATED.
+  # ISOLATED — команда слышит ТОЛЬКО своих (рекомендовано для соревновательных режимов).
+  group_type: "ISOLATED"
+
+  # Шаблон имени группы. Плейсхолдеры:
+  #   {mode_display} — display_name режима (см. mode.display_name)
+  #   {team_index}   — номер команды, начиная с 1
+  #   {team_name}    — отображаемое имя команды из messages.yml ui.teamselect.teams.N.name
+  group_name_pattern: "{mode_display} • {team_name}"
+
+  # Если false — группа исчезает автоматически, когда из неё уходит последний участник.
+  # true — группа остаётся в SVC до удаления админом (обычно не нужно).
+  persistent: false

@@ -261,6 +261,39 @@ object ConfigKeys {
             "&aМатч стартует неполным составом (&f{current}&a/&f{max}&a, команд &f{teams_current}&a/&f{teams_required}&a)."
         ) {}
 
+    /**
+     * Master switch for the SimpleVoiceChat integration.
+     * Even if SVC plugin is installed, set to false to disable per-team voice grouping.
+     */
+    val VOICECHAT_ENABLED = object : ConfigKey<Boolean>("voicechat.enabled", true) {}
+
+    /**
+     * Group type for per-team voice groups. Allowed: NORMAL, OPEN, ISOLATED.
+     * ISOLATED — team members hear ONLY each other (recommended for competitive play).
+     */
+    val VOICECHAT_GROUP_TYPE = object : ConfigKey<String>("voicechat.group_type", "ISOLATED") {
+        override fun validate(value: String) {
+            require(value.uppercase() in setOf("NORMAL", "OPEN", "ISOLATED")) {
+                "voicechat.group_type must be NORMAL, OPEN or ISOLATED"
+            }
+        }
+    }
+
+    /**
+     * Group name template. Supported placeholders:
+     * {mode_display}, {team_index} (1-based), {team_name} (from messages.yml ui.teamselect.teams.N.name).
+     */
+    val VOICECHAT_GROUP_NAME_PATTERN = object : ConfigKey<String>(
+        "voicechat.group_name_pattern",
+        "{mode_display} • {team_name}",
+    ) {}
+
+    /**
+     * If false (default), groups auto-delete when the last participant leaves.
+     * If true, groups persist in SVC until removed by an admin (rarely useful for matches).
+     */
+    val VOICECHAT_GROUP_PERSISTENT = object : ConfigKey<Boolean>("voicechat.persistent", false) {}
+
     fun register(key: ConfigKey<*>) {
         configKeys += key
     }

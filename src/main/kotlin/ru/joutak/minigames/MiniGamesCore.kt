@@ -165,6 +165,7 @@ object MiniGamesCore {
         // v2 migration: unify mode naming, add display name, drop old spartakiad.minigame_name.
         migrateApiConfigV2(configPath)
         migrateApiConfigV3(configPath)
+        migrateApiConfigV4(configPath)
 
         plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
 
@@ -300,6 +301,38 @@ object MiniGamesCore {
             yaml.save(file)
         } catch (t: Throwable) {
             plugin.logger.severe("Failed to migrate MiniGamesAPI config to v3: ${t.message}")
+        }
+    }
+
+    private fun migrateApiConfigV4(configPath: Path) {
+        try {
+            val file = configPath.toFile()
+            if (!file.exists()) return
+            val yaml = YamlConfiguration.loadConfiguration(file)
+
+            val version = yaml.getInt("minigamesapi.config_version", 1)
+
+            // SimpleVoiceChat integration (per-team voice groups on match start).
+            if (!yaml.contains("voicechat.enabled")) {
+                yaml.set("voicechat.enabled", true)
+            }
+            if (!yaml.contains("voicechat.group_type")) {
+                yaml.set("voicechat.group_type", "ISOLATED")
+            }
+            if (!yaml.contains("voicechat.group_name_pattern")) {
+                yaml.set("voicechat.group_name_pattern", "{mode_display} • {team_name}")
+            }
+            if (!yaml.contains("voicechat.persistent")) {
+                yaml.set("voicechat.persistent", false)
+            }
+
+            if (version < 4) {
+                yaml.set("minigamesapi.config_version", 4)
+            }
+
+            yaml.save(file)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to migrate MiniGamesAPI config to v4: ${t.message}")
         }
     }
 
@@ -506,7 +539,16 @@ object MiniGamesCore {
     }
 
     private fun loadDependencies() {
-        // Placeholder for future optional dependency loading (e.g. LibreLogin UUID resolver).
+        // Optional integrations. Each guarded by a runtime presence check so the
+        // referenced classes are never loaded on servers without the dependency.
+        try {
+            if (Bukkit.getPluginManager().getPlugin("voicechat") != null) {
+                ru.joutak.minigames.integration.voicechat.VoiceChatIntegration
+                    .tryInitialize(plugin, configuration)
+            }
+        } catch (t: Throwable) {
+            plugin.logger.warning("[MiniGamesAPI] Failed to load SimpleVoiceChat integration: ${t.message}")
+        }
     }
 
     private fun registerEvents() {
@@ -563,7 +605,7 @@ object MiniGamesCore {
     private const val DEFAULT_API_CONFIG: String = """
 minigamesapi:
   # Service marker to distinguish API config from mode configs.
-  config_version: 3
+  config_version: 4
 
 mode:
   # Short logical key used for DB (mode_key) and internal identifiers.
@@ -659,6 +701,16 @@ teamselect:
     "14": { material: BROWN_WOOL, color: DARK_RED }
     "15": { material: GRAY_WOOL, color: GRAY }
     "16": { material: LIGHT_GRAY_WOOL, color: DARK_GRAY }
+
+voicechat:
+  # Set to false to disable per-team voice grouping even if SVC is installed.
+  enabled: true
+  # Group type: NORMAL | OPEN | ISOLATED. ISOLATED = team hears ONLY each other.
+  group_type: "ISOLATED"
+  # Group name template. Placeholders: {mode_display}, {team_index} (1-based), {team_name}.
+  group_name_pattern: "{mode_display} • {team_name}"
+  # If false, groups auto-delete when the last participant leaves.
+  persistent: false
 """
 
     private const val DEFAULT_MESSAGES_CONFIG: String = """

@@ -1,6 +1,9 @@
 package ru.joutak.minigames.domain
 
+import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.event.GameInstanceEndedEvent
 import ru.joutak.minigames.ui.QueueBossBarManager
 import java.util.UUID
 
@@ -129,6 +132,12 @@ class GameInstance(val config: GameInstanceConfig) {
         val removed = activePlayerIds.remove(uuid)
         if (removed && activePlayerIds.isEmpty()) {
             started = false
+            val instance = this
+            // Dispatch on the main thread so listeners (e.g. VoiceChat integration)
+            // can safely touch Bukkit/SVC state.
+            Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
+                Bukkit.getPluginManager().callEvent(GameInstanceEndedEvent(instance))
+            })
         }
         return removed
     }
