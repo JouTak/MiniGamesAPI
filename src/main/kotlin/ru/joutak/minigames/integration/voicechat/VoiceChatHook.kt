@@ -4,6 +4,7 @@ import de.maxhenkel.voicechat.api.VoicechatApi
 import de.maxhenkel.voicechat.api.VoicechatPlugin
 import de.maxhenkel.voicechat.api.VoicechatServerApi
 import de.maxhenkel.voicechat.api.events.EventRegistration
+import de.maxhenkel.voicechat.api.events.JoinGroupEvent
 import de.maxhenkel.voicechat.api.events.VoicechatServerStartedEvent
 import ru.joutak.minigames.MiniGamesCore
 
@@ -29,6 +30,14 @@ object VoiceChatHook : VoicechatPlugin {
             MiniGamesCore.plugin.logger.info(
                 "[MiniGamesAPI] SimpleVoiceChat server API attached"
             )
+        }
+
+        registration.registerEvent(JoinGroupEvent::class.java) { event ->
+            val groupId = event.group?.id ?: return@registerEvent
+            val instance = TeamGroupManager.getOwnerOf(groupId) ?: return@registerEvent
+            val uuid = event.connection?.player?.uuid ?: return@registerEvent
+            if (TeamGroupManager.isAllowedToJoin(uuid, groupId, instance)) return@registerEvent
+            event.cancel()
         }
     }
 }

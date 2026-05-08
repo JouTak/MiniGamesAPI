@@ -6,19 +6,26 @@ import ru.joutak.minigames.MiniGamesAPI
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.domain.GameInstance
+import ru.joutak.minigames.results.model.MatchResult
 import java.util.Collections
 import java.util.UUID
 import java.util.WeakHashMap
 
-/**
- * Creates one voice group per team on match start and dissolves them on match end.
- */
 object TeamGroupManager {
 
     @Volatile
     private var api: VoicechatServerApi? = null
 
     private val groupsByInstance: MutableMap<GameInstance, MutableList<UUID>> =
+        Collections.synchronizedMap(WeakHashMap())
+
+    private val groupOwnerByGroupId: MutableMap<UUID, GameInstance> =
+        Collections.synchronizedMap(mutableMapOf())
+
+    private val playerOriginalGroup: MutableMap<UUID, UUID> =
+        Collections.synchronizedMap(mutableMapOf())
+
+    private val spectatorAccess: MutableMap<GameInstance, MutableSet<UUID>> =
         Collections.synchronizedMap(WeakHashMap())
 
     fun attach(serverApi: VoicechatServerApi) {
@@ -50,6 +57,12 @@ object TeamGroupManager {
 
             createdIds += group.id
 
+            // Register access BEFORE setGroup() — JoinGroupEvent fires synchronously.
+            groupOwnerByGroupId[group.id] = instance
+            for (player in players) {
+                playerOriginalGroup[player.uniqueId] = group.id
+            }
+
             for (player in players) {
                 val connection = api.getConnectionOf(player.uniqueId) ?: continue
                 if (!connection.isInstalled) continue
@@ -67,15 +80,38 @@ object TeamGroupManager {
         }
     }
 
+    fun dissolveGroupsForResult(result: MatchResult) {
+        if (api == null) return
+        val playerIds = result.players.mapTo(mutableSetOf()) { it.playerUuid }
+        if (playerIds.isEmpty()) return
+
+        val keys = synchronized(groupsByInstance) { groupsByInstance.keys.toList() }
+        val match = keys.firstOrNull { inst ->
+            val groupIds = groupsByInstance[inst] ?: emptyList()
+            val originalUuids = synchronized(playerOriginalGroup) {
+                playerOriginalGroup.filterValues { it in groupIds }.keys.toSet()
+            }
+            playerIds.any { it in inst.getActivePlayerIds() } || playerIds.any { it in originalUuids }
+        } ?: return
+
+        dissolveGroups(match)
+    }
+
     fun dissolveGroups(instance: GameInstance) {
         val api = this.api ?: return
         val groupIds = groupsByInstance.remove(instance) ?: return
 
-        // Remove every player who could still be in one of our groups.
-        // For non-persistent groups SVC will auto-delete the group once empty.
         val candidates = mutableSetOf<UUID>()
         candidates += instance.getActivePlayerIds()
         for (team in instance.teams) for (p in team) candidates += p.uniqueId
+        synchronized(playerOriginalGroup) {
+            playerOriginalGroup.forEach { (uuid, groupId) ->
+                if (groupId in groupIds) candidates += uuid
+            }
+        }
+        synchronized(spectatorAccess) {
+            spectatorAccess[instance]?.let { candidates += it }
+        }
 
         for (uuid in candidates) {
             val connection = api.getConnectionOf(uuid) ?: continue
@@ -84,11 +120,36 @@ object TeamGroupManager {
             runCatching { connection.setGroup(null) }
         }
 
-        // For persistent groups we have to remove them explicitly.
         if (MiniGamesCore.configuration.get(ConfigKeys.VOICECHAT_GROUP_PERSISTENT)) {
             for (id in groupIds) {
                 runCatching { api.removeGroup(id) }
             }
+        }
+
+        groupIds.forEach { groupOwnerByGroupId.remove(it) }
+        synchronized(playerOriginalGroup) {
+            playerOriginalGroup.entries.removeIf { it.value in groupIds }
+        }
+        spectatorAccess.remove(instance)
+    }
+
+    fun getOwnerOf(groupId: UUID): GameInstance? = groupOwnerByGroupId[groupId]
+
+    fun isAllowedToJoin(uuid: UUID, groupId: UUID, instance: GameInstance): Boolean {
+        if (playerOriginalGroup[uuid] == groupId) return true
+        val spectators = spectatorAccess[instance] ?: return false
+        return uuid in spectators
+    }
+
+    fun addSpectator(instance: GameInstance, uuid: UUID) {
+        synchronized(spectatorAccess) {
+            spectatorAccess.getOrPut(instance) { mutableSetOf() }.add(uuid)
+        }
+    }
+
+    fun removeSpectator(instance: GameInstance, uuid: UUID) {
+        synchronized(spectatorAccess) {
+            spectatorAccess[instance]?.remove(uuid)
         }
     }
 
