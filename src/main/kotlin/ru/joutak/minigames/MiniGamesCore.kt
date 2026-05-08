@@ -3,6 +3,9 @@ package ru.joutak.minigames
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.server.PluginEnableEvent
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.ForceRunCommand
 import ru.joutak.minigames.command.forceready.ForceReadyCommand
@@ -563,8 +566,23 @@ object MiniGamesCore {
     }
 
     private fun loadDependencies() {
-        // Optional integrations. Each guarded by a runtime presence check so the
-        // referenced classes are never loaded on servers without the dependency.
+        tryRegisterVoiceChat()
+        tryRegisterPlaceholderApi()
+
+        // Hosts that shade MAPI may not declare voicechat/PlaceholderAPI in their own
+        // plugin.yml softdepend, so those plugins enable AFTER us. Catch them here.
+        Bukkit.getPluginManager().registerEvents(object : Listener {
+            @EventHandler
+            fun onPluginEnable(event: PluginEnableEvent) {
+                when (event.plugin.name) {
+                    "voicechat" -> tryRegisterVoiceChat()
+                    "PlaceholderAPI" -> tryRegisterPlaceholderApi()
+                }
+            }
+        }, plugin)
+    }
+
+    private fun tryRegisterVoiceChat() {
         try {
             if (Bukkit.getPluginManager().getPlugin("voicechat") != null) {
                 ru.joutak.minigames.integration.voicechat.VoiceChatIntegration
@@ -573,7 +591,9 @@ object MiniGamesCore {
         } catch (t: Throwable) {
             plugin.logger.warning("[MiniGamesAPI] Failed to load SimpleVoiceChat integration: ${t.message}")
         }
+    }
 
+    private fun tryRegisterPlaceholderApi() {
         try {
             if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
                 ru.joutak.minigames.integration.placeholderapi.PlaceholderApiIntegration
