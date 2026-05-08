@@ -39,6 +39,9 @@ class GameInstance(val config: GameInstanceConfig) {
      */
     private val activePlayerIds: MutableSet<UUID> = mutableSetOf()
 
+    /** UUID -> team index snapshot at match start. Survives modes wiping [teams]. */
+    private val playerToTeamIndex: MutableMap<UUID, Int> = mutableMapOf()
+
     /**
      * Balanced add (used by generic matchmaking).
      */
@@ -116,7 +119,13 @@ class GameInstance(val config: GameInstanceConfig) {
     fun startMatchAndSnapshotPlayers(): Set<UUID> {
         started = true
         activePlayerIds.clear()
-        teams.flatten().forEach { activePlayerIds.add(it.uniqueId) }
+        playerToTeamIndex.clear()
+        for ((teamIndex, team) in teams.withIndex()) {
+            for (player in team) {
+                activePlayerIds.add(player.uniqueId)
+                playerToTeamIndex[player.uniqueId] = teamIndex
+            }
+        }
         return activePlayerIds.toSet()
     }
 
@@ -124,12 +133,18 @@ class GameInstance(val config: GameInstanceConfig) {
 
     fun getActivePlayerIds(): Set<UUID> = activePlayerIds.toSet()
 
+    /** 0-based team index from match-start snapshot, or null if not an active participant. */
+    fun getActiveTeamIndex(uuid: UUID): Int? = playerToTeamIndex[uuid]
+
     /**
      * Remove a player from active match participants (used when a game ends / player leaves).
      * When the last participant leaves, instance becomes available again.
      */
     fun removeActivePlayer(uuid: UUID): Boolean {
         val removed = activePlayerIds.remove(uuid)
+        if (removed) {
+            playerToTeamIndex.remove(uuid)
+        }
         if (removed && activePlayerIds.isEmpty()) {
             started = false
             val instance = this

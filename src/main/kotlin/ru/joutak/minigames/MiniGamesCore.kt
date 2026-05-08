@@ -573,6 +573,15 @@ object MiniGamesCore {
         } catch (t: Throwable) {
             plugin.logger.warning("[MiniGamesAPI] Failed to load SimpleVoiceChat integration: ${t.message}")
         }
+
+        try {
+            if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+                ru.joutak.minigames.integration.placeholderapi.PlaceholderApiIntegration
+                    .tryInitialize(plugin)
+            }
+        } catch (t: Throwable) {
+            plugin.logger.warning("[MiniGamesAPI] Failed to load PlaceholderAPI integration: ${t.message}")
+        }
     }
 
     private fun registerEvents() {

@@ -123,6 +123,12 @@ object MiniGamesAPI {
             .firstOrNull { it.started && it.hasActivePlayer(uuid) }
     }
 
+    fun getCurrentTeamStyle(player: Player): TeamStyle? {
+        val activeIndex = findActiveMatchInstance(player)?.getActiveTeamIndex(player.uniqueId)
+        val teamIndex = activeIndex ?: getPlayerTeamInLobby(player) ?: return null
+        return getTeamStyle(teamIndex + 1)
+    }
+
     fun allowVoiceSpectator(player: Player, instance: GameInstance) {
         voiceSpectatorRegistry?.allow(player, instance)
     }
