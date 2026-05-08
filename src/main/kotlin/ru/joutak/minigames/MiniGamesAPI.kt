@@ -6,8 +6,11 @@ import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.TeamStyle
 import ru.joutak.minigames.domain.TeamStyleProvider
+import ru.joutak.minigames.domain.VoiceSpectatorRegistry
+import ru.joutak.minigames.event.MatchResultRecordingEvent
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
@@ -24,6 +27,15 @@ object MiniGamesAPI {
     lateinit var config: Config
         internal set
 
+    /**
+     * Bound at runtime by `VoiceChatIntegration.tryInitialize` (only on servers
+     * with SimpleVoiceChat installed). Stays null otherwise — see
+     * [VoiceSpectatorRegistry] for the rationale.
+     */
+    @Volatile
+    var voiceSpectatorRegistry: VoiceSpectatorRegistry? = null
+        internal set
+
     fun initialize(plugin: JavaPlugin, config: Config) {
         this.plugin = plugin
         this.config = config
@@ -38,6 +50,11 @@ object MiniGamesAPI {
     fun isResultsEnabled(): Boolean = ResultsManager.isEnabled()
 
     fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
+        // Notify cross-cutting integrations (voice chat group teardown, etc.)
+        // that the match has just ended. Fire on the main thread — listeners
+        // may touch Bukkit state. Must come BEFORE async DB / tournament work.
+        runOnMainThread { Bukkit.getPluginManager().callEvent(MatchResultRecordingEvent(result)) }
+
         // Tournament progress must update even if results storage is disabled.
         // IMPORTANT: modes are responsible for any post-game ceremony/teleports.
         val tournamentFuture = TournamentManager.applyMatchResult(result)
@@ -116,5 +133,37 @@ object MiniGamesAPI {
             }
         }
         return null
+    }
+
+    /**
+     * Returns the started instance the [player] is currently an active match
+     * participant of, or null. Useful for modes that need an instance handle
+     * for [allowVoiceSpectator] without storing it themselves.
+     */
+    fun findActiveMatchInstance(player: Player): GameInstance? {
+        val uuid = player.uniqueId
+        return MatchmakingManager.getActiveInstances()
+            .firstOrNull { it.started && it.hasActivePlayer(uuid) }
+    }
+
+    /**
+     * Mark [player] as allowed to enter ANY of [instance]'s per-team voice
+     * groups. No-op when SimpleVoiceChat is not installed.
+     */
+    fun allowVoiceSpectator(player: Player, instance: GameInstance) {
+        voiceSpectatorRegistry?.allow(player, instance)
+    }
+
+    /** Inverse of [allowVoiceSpectator]. No-op when SVC is not installed. */
+    fun revokeVoiceSpectator(player: Player, instance: GameInstance) {
+        voiceSpectatorRegistry?.revoke(player, instance)
+    }
+
+    private fun runOnMainThread(task: () -> Unit) {
+        if (Bukkit.isPrimaryThread()) {
+            task()
+        } else {
+            Bukkit.getScheduler().runTask(plugin, Runnable { task() })
+        }
     }
 }

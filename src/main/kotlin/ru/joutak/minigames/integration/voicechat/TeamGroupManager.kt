@@ -6,12 +6,25 @@ import ru.joutak.minigames.MiniGamesAPI
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.domain.GameInstance
+import ru.joutak.minigames.results.model.MatchResult
 import java.util.Collections
 import java.util.UUID
 import java.util.WeakHashMap
 
 /**
- * Creates one voice group per team on match start and dissolves them on match end.
+ * Lifecycle:
+ *  - on [GameInstanceReadyEvent][ru.joutak.minigames.event.GameInstanceReadyEvent] —
+ *    [assignTeamsToGroups] creates one voice group per team and puts roster into it.
+ *  - on [MatchResultRecordingEvent][ru.joutak.minigames.event.MatchResultRecordingEvent]
+ *    — [dissolveGroupsForResult] tears the groups down (called when a mode
+ *    invokes `MiniGamesAPI.recordMatchResult`).
+ *  - on [GameInstanceEndedEvent][ru.joutak.minigames.event.GameInstanceEndedEvent]
+ *    — [dissolveGroups] is the safety net for modes that don't call
+ *    `recordMatchResult`.
+ *
+ * Access control: only original team members (their own group) and
+ * registered spectators (any group of the same instance) are allowed in.
+ * Outsiders are stopped at SVC's [JoinGroupEvent] (handled in [VoiceChatHook]).
  */
 object TeamGroupManager {
 
@@ -19,6 +32,18 @@ object TeamGroupManager {
     private var api: VoicechatServerApi? = null
 
     private val groupsByInstance: MutableMap<GameInstance, MutableList<UUID>> =
+        Collections.synchronizedMap(WeakHashMap())
+
+    /** group id → instance owning that group (reverse lookup for [JoinGroupEvent]). */
+    private val groupOwnerByGroupId: MutableMap<UUID, GameInstance> =
+        Collections.synchronizedMap(mutableMapOf())
+
+    /** player uuid → the group id they were originally placed in (their own team's). */
+    private val playerOriginalGroup: MutableMap<UUID, UUID> =
+        Collections.synchronizedMap(mutableMapOf())
+
+    /** instance → set of player uuids allowed in ANY of that instance's groups. */
+    private val spectatorAccess: MutableMap<GameInstance, MutableSet<UUID>> =
         Collections.synchronizedMap(WeakHashMap())
 
     fun attach(serverApi: VoicechatServerApi) {
@@ -50,6 +75,14 @@ object TeamGroupManager {
 
             createdIds += group.id
 
+            // IMPORTANT ordering: register access entries BEFORE setGroup() —
+            // SVC fires JoinGroupEvent synchronously, our guard must already
+            // know the player is allowed.
+            groupOwnerByGroupId[group.id] = instance
+            for (player in players) {
+                playerOriginalGroup[player.uniqueId] = group.id
+            }
+
             for (player in players) {
                 val connection = api.getConnectionOf(player.uniqueId) ?: continue
                 if (!connection.isInstalled) continue
@@ -67,6 +100,28 @@ object TeamGroupManager {
         }
     }
 
+    /** Tear down groups for the instance the [result]'s players currently occupy. */
+    fun dissolveGroupsForResult(result: MatchResult) {
+        if (api == null) return
+        val playerIds = result.players.mapTo(mutableSetOf()) { it.playerUuid }
+        if (playerIds.isEmpty()) return
+
+        // Snapshot keys: dissolveGroups removes from groupsByInstance and we
+        // don't want to mutate while iterating.
+        val keys = synchronized(groupsByInstance) { groupsByInstance.keys.toList() }
+        val match = keys.firstOrNull { inst ->
+            // Match by either currently-active participants or by who was originally
+            // placed into this instance's groups (some modes wipe activePlayerIds early).
+            val groupIds = groupsByInstance[inst] ?: emptyList()
+            val originalUuids = synchronized(playerOriginalGroup) {
+                playerOriginalGroup.filterValues { it in groupIds }.keys.toSet()
+            }
+            playerIds.any { it in inst.getActivePlayerIds() } || playerIds.any { it in originalUuids }
+        } ?: return
+
+        dissolveGroups(match)
+    }
+
     fun dissolveGroups(instance: GameInstance) {
         val api = this.api ?: return
         val groupIds = groupsByInstance.remove(instance) ?: return
@@ -76,6 +131,15 @@ object TeamGroupManager {
         val candidates = mutableSetOf<UUID>()
         candidates += instance.getActivePlayerIds()
         for (team in instance.teams) for (p in team) candidates += p.uniqueId
+        // Include players we tracked as original members (in case mode cleared teams).
+        synchronized(playerOriginalGroup) {
+            playerOriginalGroup.forEach { (uuid, groupId) ->
+                if (groupId in groupIds) candidates += uuid
+            }
+        }
+        synchronized(spectatorAccess) {
+            spectatorAccess[instance]?.let { candidates += it }
+        }
 
         for (uuid in candidates) {
             val connection = api.getConnectionOf(uuid) ?: continue
@@ -89,6 +153,35 @@ object TeamGroupManager {
             for (id in groupIds) {
                 runCatching { api.removeGroup(id) }
             }
+        }
+
+        // Tidy access maps so stale entries don't accumulate.
+        groupIds.forEach { groupOwnerByGroupId.remove(it) }
+        synchronized(playerOriginalGroup) {
+            playerOriginalGroup.entries.removeIf { it.value in groupIds }
+        }
+        spectatorAccess.remove(instance)
+    }
+
+    // --- access control surface (called by VoiceChatHook + VoiceSpectatorRegistry impl) ---
+
+    fun getOwnerOf(groupId: UUID): GameInstance? = groupOwnerByGroupId[groupId]
+
+    fun isAllowedToJoin(uuid: UUID, groupId: UUID, instance: GameInstance): Boolean {
+        if (playerOriginalGroup[uuid] == groupId) return true
+        val spectators = spectatorAccess[instance] ?: return false
+        return uuid in spectators
+    }
+
+    fun addSpectator(instance: GameInstance, uuid: UUID) {
+        synchronized(spectatorAccess) {
+            spectatorAccess.getOrPut(instance) { mutableSetOf() }.add(uuid)
+        }
+    }
+
+    fun removeSpectator(instance: GameInstance, uuid: UUID) {
+        synchronized(spectatorAccess) {
+            spectatorAccess[instance]?.remove(uuid)
         }
     }
 
