@@ -6,6 +6,11 @@ import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.domain.GameInstance
+import ru.joutak.minigames.domain.TeamStyle
+import ru.joutak.minigames.domain.TeamStyleProvider
+import ru.joutak.minigames.domain.VoiceSpectatorRegistry
+import ru.joutak.minigames.event.MatchResultRecordingEvent
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
@@ -22,6 +27,10 @@ object MiniGamesAPI {
     lateinit var config: Config
         internal set
 
+    @Volatile
+    var voiceSpectatorRegistry: VoiceSpectatorRegistry? = null
+        internal set
+
     fun initialize(plugin: JavaPlugin, config: Config) {
         this.plugin = plugin
         this.config = config
@@ -36,6 +45,8 @@ object MiniGamesAPI {
     fun isResultsEnabled(): Boolean = ResultsManager.isEnabled()
 
     fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
+        runOnMainThread { Bukkit.getPluginManager().callEvent(MatchResultRecordingEvent(result)) }
+
         // Tournament progress must update even if results storage is disabled.
         // IMPORTANT: modes are responsible for any post-game ceremony/teleports.
         val tournamentFuture = TournamentManager.applyMatchResult(result)
@@ -78,6 +89,10 @@ object MiniGamesAPI {
         return ResultsManager.hasPlayerWon(eventId, stage, modeKey, playerUuid)
     }
 
+    fun getTeamStyle(teamNumber: Int): TeamStyle = TeamStyleProvider.get(teamNumber)
+
+    fun getTeamStyles(count: Int): List<TeamStyle> = TeamStyleProvider.getAll(count)
+
     fun getTopPlayerIntMetric(
         modeKey: String,
         metricKey: String,
@@ -100,5 +115,33 @@ object MiniGamesAPI {
             }
         }
         return null
+    }
+
+    fun findActiveMatchInstance(player: Player): GameInstance? {
+        val uuid = player.uniqueId
+        return MatchmakingManager.getActiveInstances()
+            .firstOrNull { it.started && it.hasActivePlayer(uuid) }
+    }
+
+    fun getCurrentTeamStyle(player: Player): TeamStyle? {
+        val activeIndex = findActiveMatchInstance(player)?.getActiveTeamIndex(player.uniqueId)
+        val teamIndex = activeIndex ?: getPlayerTeamInLobby(player) ?: return null
+        return getTeamStyle(teamIndex + 1)
+    }
+
+    fun allowVoiceSpectator(player: Player, instance: GameInstance) {
+        voiceSpectatorRegistry?.allow(player, instance)
+    }
+
+    fun revokeVoiceSpectator(player: Player, instance: GameInstance) {
+        voiceSpectatorRegistry?.revoke(player, instance)
+    }
+
+    private fun runOnMainThread(task: () -> Unit) {
+        if (Bukkit.isPrimaryThread()) {
+            task()
+        } else {
+            Bukkit.getScheduler().runTask(plugin, Runnable { task() })
+        }
     }
 }

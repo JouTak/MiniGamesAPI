@@ -1,6 +1,9 @@
 package ru.joutak.minigames.domain
 
+import org.bukkit.Bukkit
 import org.bukkit.entity.Player
+import ru.joutak.minigames.MiniGamesCore
+import ru.joutak.minigames.event.GameInstanceEndedEvent
 import ru.joutak.minigames.ui.QueueBossBarManager
 import java.util.UUID
 
@@ -35,6 +38,9 @@ class GameInstance(val config: GameInstanceConfig) {
      * This set is independent from [teams] (because modes may clear teams at start).
      */
     private val activePlayerIds: MutableSet<UUID> = mutableSetOf()
+
+    /** UUID -> team index snapshot at match start. Survives modes wiping [teams]. */
+    private val playerToTeamIndex: MutableMap<UUID, Int> = mutableMapOf()
 
     /**
      * Balanced add (used by generic matchmaking).
@@ -113,7 +119,13 @@ class GameInstance(val config: GameInstanceConfig) {
     fun startMatchAndSnapshotPlayers(): Set<UUID> {
         started = true
         activePlayerIds.clear()
-        teams.flatten().forEach { activePlayerIds.add(it.uniqueId) }
+        playerToTeamIndex.clear()
+        for ((teamIndex, team) in teams.withIndex()) {
+            for (player in team) {
+                activePlayerIds.add(player.uniqueId)
+                playerToTeamIndex[player.uniqueId] = teamIndex
+            }
+        }
         return activePlayerIds.toSet()
     }
 
@@ -121,14 +133,26 @@ class GameInstance(val config: GameInstanceConfig) {
 
     fun getActivePlayerIds(): Set<UUID> = activePlayerIds.toSet()
 
+    /** 0-based team index from match-start snapshot, or null if not an active participant. */
+    fun getActiveTeamIndex(uuid: UUID): Int? = playerToTeamIndex[uuid]
+
     /**
      * Remove a player from active match participants (used when a game ends / player leaves).
      * When the last participant leaves, instance becomes available again.
      */
     fun removeActivePlayer(uuid: UUID): Boolean {
         val removed = activePlayerIds.remove(uuid)
+        if (removed) {
+            playerToTeamIndex.remove(uuid)
+        }
         if (removed && activePlayerIds.isEmpty()) {
             started = false
+            val instance = this
+            // Dispatch on the main thread so listeners (e.g. VoiceChat integration)
+            // can safely touch Bukkit/SVC state.
+            Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
+                Bukkit.getPluginManager().callEvent(GameInstanceEndedEvent(instance))
+            })
         }
         return removed
     }

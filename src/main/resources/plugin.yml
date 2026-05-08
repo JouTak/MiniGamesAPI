@@ -8,6 +8,6 @@ contributors: [ 'SumrakBro','acrighthere','Stunnerer' ]
 website: ${WEBSITE}
 
 depend: [ ]
-softdepend: [ 'LibreLogin' ]
+softdepend: [ 'LibreLogin', 'voicechat', 'PlaceholderAPI' ]
 libraries:
   - 'org.jetbrains.kotlin:kotlin-stdlib:${KOTLIN_VERSION}'

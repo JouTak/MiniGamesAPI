@@ -4,9 +4,7 @@ package ru.joutak.minigames.gui
 import net.kyori.adventure.text.Component
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer
 import org.bukkit.Bukkit
-import org.bukkit.Material
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
@@ -15,6 +13,7 @@ import org.bukkit.event.inventory.InventoryDragEvent
 import org.bukkit.event.inventory.InventoryCloseEvent
 import org.bukkit.inventory.Inventory
 import org.bukkit.inventory.ItemStack
+import ru.joutak.minigames.MiniGamesAPI
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
@@ -24,14 +23,6 @@ import org.bukkit.configuration.file.YamlConfiguration
 object TeamSelectionGui : Listener {
 
     private val openInventories = mutableMapOf<Player, TeamSelectionData>()
-
-    private val amp: LegacyComponentSerializer = LegacyComponentSerializer.legacyAmpersand()
-
-    private data class TeamStyle(
-        val material: Material,
-        val color: NamedTextColor,
-        val displayName: Component?,
-    )
 
     data class TeamSelectionData(
         val inventory: Inventory,
@@ -49,7 +40,7 @@ object TeamSelectionGui : Listener {
 
         instance.teams.forEachIndexed { index, team ->
             val teamNumber = index + 1
-            val style = getTeamStyle(yaml, teamNumber)
+            val style = MiniGamesAPI.getTeamStyle(teamNumber)
 
             val item = ItemStack(style.material)
 
@@ -74,9 +65,7 @@ object TeamSelectionGui : Listener {
                 loreList.add(Component.text("Команда пуста", NamedTextColor.GRAY))
             }
 
-            val teamName = style.displayName
-                ?: Component.text("Команда $teamNumber", style.color).decorate(TextDecoration.BOLD)
-            meta.displayName(teamName)
+            meta.displayName(style.displayName)
             meta.lore(loreList)
 
             item.itemMeta = meta
@@ -85,70 +74,6 @@ object TeamSelectionGui : Listener {
 
         openInventories[player] = TeamSelectionData(inventory, instance, callback)
         player.openInventory(inventory)
-    }
-
-    private fun getTeamStyle(yaml: YamlConfiguration, teamNumber: Int): TeamStyle {
-        val base = "teamselect.teams.$teamNumber"
-
-        val materialName = yaml.getString("$base.material")?.trim()?.uppercase()
-        val material = materialName?.let { Material.matchMaterial(it) } ?: defaultTeamMaterial(teamNumber)
-
-        val colorName = yaml.getString("$base.color")?.trim()?.uppercase()
-        val color = parseNamedColor(colorName) ?: defaultTeamColor(teamNumber)
-
-        val nameStr = Messages.getString("ui.teamselect.teams.$teamNumber.name") ?: yaml.getString("$base.name")
-        val display = nameStr?.let { amp.deserialize(it) }
-
-        return TeamStyle(material, color, display)
-    }
-
-    private fun parseNamedColor(name: String?): NamedTextColor? {
-        if (name.isNullOrBlank()) return null
-        return NamedTextColor.NAMES.value(name.lowercase())
-    }
-
-    private fun defaultTeamMaterial(teamNumber: Int): Material {
-        return when (teamNumber) {
-            1 -> Material.RED_WOOL
-            2 -> Material.YELLOW_WOOL
-            3 -> Material.GREEN_WOOL
-            4 -> Material.BLUE_WOOL
-            5 -> Material.CYAN_WOOL
-            6 -> Material.PURPLE_WOOL
-            7 -> Material.ORANGE_WOOL
-            8 -> Material.LIGHT_BLUE_WOOL
-            9 -> Material.WHITE_WOOL
-            10 -> Material.BLACK_WOOL
-            11 -> Material.MAGENTA_WOOL
-            12 -> Material.LIME_WOOL
-            13 -> Material.PINK_WOOL
-            14 -> Material.BROWN_WOOL
-            15 -> Material.GRAY_WOOL
-            16 -> Material.LIGHT_GRAY_WOOL
-            else -> Material.WHITE_WOOL
-        }
-    }
-
-    private fun defaultTeamColor(teamNumber: Int): NamedTextColor {
-        return when (teamNumber) {
-            1 -> NamedTextColor.RED
-            2 -> NamedTextColor.YELLOW
-            3 -> NamedTextColor.GREEN
-            4 -> NamedTextColor.BLUE
-            5 -> NamedTextColor.AQUA
-            6 -> NamedTextColor.LIGHT_PURPLE
-            7 -> NamedTextColor.GOLD
-            8 -> NamedTextColor.DARK_AQUA
-            9 -> NamedTextColor.WHITE
-            10 -> NamedTextColor.BLACK
-            11 -> NamedTextColor.DARK_PURPLE
-            12 -> NamedTextColor.DARK_GREEN
-            13 -> NamedTextColor.LIGHT_PURPLE
-            14 -> NamedTextColor.DARK_RED
-            15 -> NamedTextColor.GRAY
-            16 -> NamedTextColor.DARK_GRAY
-            else -> NamedTextColor.WHITE
-        }
     }
 
     @EventHandler
