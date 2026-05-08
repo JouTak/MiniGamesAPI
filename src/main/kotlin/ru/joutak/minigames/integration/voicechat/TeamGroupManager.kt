@@ -2,9 +2,9 @@ package ru.joutak.minigames.integration.voicechat
 
 import de.maxhenkel.voicechat.api.Group
 import de.maxhenkel.voicechat.api.VoicechatServerApi
+import ru.joutak.minigames.MiniGamesAPI
 import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
-import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
 import java.util.Collections
 import java.util.UUID
@@ -110,11 +110,8 @@ object TeamGroupManager {
         return stripColorCodes(raw).take(MAX_GROUP_NAME_LENGTH)
     }
 
-    private fun lookupTeamName(teamNumber: Int): String {
-        val configured = Messages.getString("ui.teamselect.teams.$teamNumber.name")
-        if (!configured.isNullOrBlank()) return stripColorCodes(configured)
-        return "Команда $teamNumber"
-    }
+    private fun lookupTeamName(teamNumber: Int): String =
+        MiniGamesAPI.getTeamStyle(teamNumber).displayNamePlain
 
     private fun stripColorCodes(input: String): String {
         // Drop legacy &x and ChatColor section-x codes; SVC group name is plain text.

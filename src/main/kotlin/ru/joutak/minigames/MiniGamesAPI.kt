@@ -6,6 +6,8 @@ import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.config.Config
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
+import ru.joutak.minigames.domain.TeamStyle
+import ru.joutak.minigames.domain.TeamStyleProvider
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
@@ -77,6 +79,10 @@ object MiniGamesAPI {
     ): CompletableFuture<Boolean> {
         return ResultsManager.hasPlayerWon(eventId, stage, modeKey, playerUuid)
     }
+
+    fun getTeamStyle(teamNumber: Int): TeamStyle = TeamStyleProvider.get(teamNumber)
+
+    fun getTeamStyles(count: Int): List<TeamStyle> = TeamStyleProvider.getAll(count)
 
     fun getTopPlayerIntMetric(
         modeKey: String,

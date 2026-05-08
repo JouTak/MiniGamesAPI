@@ -306,31 +306,62 @@ object MiniGamesCore {
 
     private fun migrateApiConfigV4(configPath: Path) {
         try {
-            val file = configPath.toFile()
-            if (!file.exists()) return
-            val yaml = YamlConfiguration.loadConfiguration(file)
+            val configFile = configPath.toFile()
+            if (!configFile.exists()) return
+            val cfg = YamlConfiguration.loadConfiguration(configFile)
 
-            val version = yaml.getInt("minigamesapi.config_version", 1)
+            val version = cfg.getInt("minigamesapi.config_version", 1)
 
-            // SimpleVoiceChat integration (per-team voice groups on match start).
-            if (!yaml.contains("voicechat.enabled")) {
-                yaml.set("voicechat.enabled", true)
+            var configChanged = false
+
+            if (!cfg.contains("voicechat.enabled")) {
+                cfg.set("voicechat.enabled", true)
+                configChanged = true
             }
-            if (!yaml.contains("voicechat.group_type")) {
-                yaml.set("voicechat.group_type", "ISOLATED")
+            if (!cfg.contains("voicechat.group_type")) {
+                cfg.set("voicechat.group_type", "ISOLATED")
+                configChanged = true
             }
-            if (!yaml.contains("voicechat.group_name_pattern")) {
-                yaml.set("voicechat.group_name_pattern", "{mode_display} • {team_name}")
+            if (!cfg.contains("voicechat.group_name_pattern")) {
+                cfg.set("voicechat.group_name_pattern", "{mode_display} • {team_name}")
+                configChanged = true
             }
-            if (!yaml.contains("voicechat.persistent")) {
-                yaml.set("voicechat.persistent", false)
+            if (!cfg.contains("voicechat.persistent")) {
+                cfg.set("voicechat.persistent", false)
+                configChanged = true
+            }
+
+            val msgFile = apiMessagesFile
+            val msg = if (msgFile.exists()) YamlConfiguration.loadConfiguration(msgFile) else null
+            var messagesChanged = false
+
+            if (msg != null) {
+                for (i in 1..16) {
+                    val cfgPath = "teamselect.teams.$i.name"
+                    val msgPath = "ui.teamselect.teams.$i.name"
+
+                    if (!cfg.contains(cfgPath)) {
+                        val fromMessages = msg.getString(msgPath)
+                        if (!fromMessages.isNullOrBlank()) {
+                            cfg.set(cfgPath, fromMessages)
+                            configChanged = true
+                        }
+                    }
+                }
+
+                if (msg.contains("ui.teamselect.teams")) {
+                    msg.set("ui.teamselect.teams", null)
+                    messagesChanged = true
+                }
             }
 
             if (version < 4) {
-                yaml.set("minigamesapi.config_version", 4)
+                cfg.set("minigamesapi.config_version", 4)
+                configChanged = true
             }
 
-            yaml.save(file)
+            if (configChanged) cfg.save(configFile)
+            if (messagesChanged) msg?.save(msgFile)
         } catch (t: Throwable) {
             plugin.logger.severe("Failed to migrate MiniGamesAPI config to v4: ${t.message}")
         }
@@ -362,16 +393,9 @@ object MiniGamesCore {
                     msg.set("messages.matchmaking.start.announce.ready_message", cfg.getString("matchmaking.start.announce.ready_message"))
                 }
 
-                // Teamselect GUI title + team names
+                // Teamselect GUI title
                 if (cfg.contains("teamselect.title") && !msg.contains("ui.teamselect.title")) {
                     msg.set("ui.teamselect.title", cfg.getString("teamselect.title"))
-                }
-                for (i in 1..16) {
-                    val p = "teamselect.teams.$i.name"
-                    val np = "ui.teamselect.teams.$i.name"
-                    if (cfg.contains(p) && !msg.contains(np)) {
-                        msg.set(np, cfg.getString(p))
-                    }
                 }
 
                 // Lobby hotbar item names/lore/deny
@@ -685,22 +709,22 @@ lobby:
 
 teamselect:
   teams:
-    "1": { material: RED_WOOL, color: RED }
-    "2": { material: YELLOW_WOOL, color: YELLOW }
-    "3": { material: GREEN_WOOL, color: GREEN }
-    "4": { material: BLUE_WOOL, color: BLUE }
-    "5": { material: CYAN_WOOL, color: AQUA }
-    "6": { material: PURPLE_WOOL, color: LIGHT_PURPLE }
-    "7": { material: ORANGE_WOOL, color: GOLD }
-    "8": { material: LIGHT_BLUE_WOOL, color: DARK_AQUA }
-    "9": { material: WHITE_WOOL, color: WHITE }
-    "10": { material: BLACK_WOOL, color: BLACK }
-    "11": { material: MAGENTA_WOOL, color: DARK_PURPLE }
-    "12": { material: LIME_WOOL, color: DARK_GREEN }
-    "13": { material: PINK_WOOL, color: LIGHT_PURPLE }
-    "14": { material: BROWN_WOOL, color: DARK_RED }
-    "15": { material: GRAY_WOOL, color: GRAY }
-    "16": { material: LIGHT_GRAY_WOOL, color: DARK_GRAY }
+    "1":  { material: RED_WOOL,         color: RED,          name: "&cКоманда 1" }
+    "2":  { material: YELLOW_WOOL,      color: YELLOW,       name: "&eКоманда 2" }
+    "3":  { material: GREEN_WOOL,       color: GREEN,        name: "&aКоманда 3" }
+    "4":  { material: BLUE_WOOL,        color: BLUE,         name: "&9Команда 4" }
+    "5":  { material: CYAN_WOOL,        color: AQUA,         name: "&bКоманда 5" }
+    "6":  { material: PURPLE_WOOL,      color: LIGHT_PURPLE, name: "&dКоманда 6" }
+    "7":  { material: ORANGE_WOOL,      color: GOLD,         name: "&6Команда 7" }
+    "8":  { material: LIGHT_BLUE_WOOL,  color: DARK_AQUA,    name: "&3Команда 8" }
+    "9":  { material: WHITE_WOOL,       color: WHITE,        name: "&fКоманда 9" }
+    "10": { material: BLACK_WOOL,       color: BLACK,        name: "&0Команда 10" }
+    "11": { material: MAGENTA_WOOL,     color: DARK_PURPLE,  name: "&5Команда 11" }
+    "12": { material: LIME_WOOL,        color: DARK_GREEN,   name: "&2Команда 12" }
+    "13": { material: PINK_WOOL,        color: LIGHT_PURPLE, name: "&dКоманда 13" }
+    "14": { material: BROWN_WOOL,       color: DARK_RED,     name: "&4Команда 14" }
+    "15": { material: GRAY_WOOL,        color: GRAY,         name: "&7Команда 15" }
+    "16": { material: LIGHT_GRAY_WOOL,  color: DARK_GRAY,    name: "&8Команда 16" }
 
 voicechat:
   # Set to false to disable per-team voice grouping even if SVC is installed.
@@ -793,23 +817,6 @@ messages:
 ui:
   teamselect:
     title: "&8Выбор команды"
-    teams:
-      "1": { name: "&cКоманда 1" }
-      "2": { name: "&eКоманда 2" }
-      "3": { name: "&aКоманда 3" }
-      "4": { name: "&9Команда 4" }
-      "5": { name: "&bКоманда 5" }
-      "6": { name: "&dКоманда 6" }
-      "7": { name: "&6Команда 7" }
-      "8": { name: "&3Команда 8" }
-      "9": { name: "&fКоманда 9" }
-      "10": { name: "&0Команда 10" }
-      "11": { name: "&5Команда 11" }
-      "12": { name: "&2Команда 12" }
-      "13": { name: "&dКоманда 13" }
-      "14": { name: "&4Команда 14" }
-      "15": { name: "&7Команда 15" }
-      "16": { name: "&8Команда 16" }
 
   lobby:
     items:
