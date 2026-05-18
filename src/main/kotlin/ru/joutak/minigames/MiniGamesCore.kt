@@ -3,6 +3,9 @@ package ru.joutak.minigames
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents
 import org.bukkit.Bukkit
 import org.bukkit.configuration.file.YamlConfiguration
+import org.bukkit.event.EventHandler
+import org.bukkit.event.Listener
+import org.bukkit.event.server.PluginEnableEvent
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.command.ForceRunCommand
 import ru.joutak.minigames.command.forceready.ForceReadyCommand
@@ -165,6 +168,7 @@ object MiniGamesCore {
         // v2 migration: unify mode naming, add display name, drop old spartakiad.minigame_name.
         migrateApiConfigV2(configPath)
         migrateApiConfigV3(configPath)
+        migrateApiConfigV4(configPath)
 
         plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
 
@@ -303,6 +307,69 @@ object MiniGamesCore {
         }
     }
 
+    private fun migrateApiConfigV4(configPath: Path) {
+        try {
+            val configFile = configPath.toFile()
+            if (!configFile.exists()) return
+            val cfg = YamlConfiguration.loadConfiguration(configFile)
+
+            val version = cfg.getInt("minigamesapi.config_version", 1)
+
+            var configChanged = false
+
+            if (!cfg.contains("voicechat.enabled")) {
+                cfg.set("voicechat.enabled", true)
+                configChanged = true
+            }
+            if (!cfg.contains("voicechat.group_type")) {
+                cfg.set("voicechat.group_type", "ISOLATED")
+                configChanged = true
+            }
+            if (!cfg.contains("voicechat.group_name_pattern")) {
+                cfg.set("voicechat.group_name_pattern", "{mode_display} • {team_name}")
+                configChanged = true
+            }
+            if (!cfg.contains("voicechat.persistent")) {
+                cfg.set("voicechat.persistent", false)
+                configChanged = true
+            }
+
+            val msgFile = apiMessagesFile
+            val msg = if (msgFile.exists()) YamlConfiguration.loadConfiguration(msgFile) else null
+            var messagesChanged = false
+
+            if (msg != null) {
+                for (i in 1..16) {
+                    val cfgPath = "teamselect.teams.$i.name"
+                    val msgPath = "ui.teamselect.teams.$i.name"
+
+                    if (!cfg.contains(cfgPath)) {
+                        val fromMessages = msg.getString(msgPath)
+                        if (!fromMessages.isNullOrBlank()) {
+                            cfg.set(cfgPath, fromMessages)
+                            configChanged = true
+                        }
+                    }
+                }
+
+                if (msg.contains("ui.teamselect.teams")) {
+                    msg.set("ui.teamselect.teams", null)
+                    messagesChanged = true
+                }
+            }
+
+            if (version < 4) {
+                cfg.set("minigamesapi.config_version", 4)
+                configChanged = true
+            }
+
+            if (configChanged) cfg.save(configFile)
+            if (messagesChanged) msg?.save(msgFile)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to migrate MiniGamesAPI config to v4: ${t.message}")
+        }
+    }
+
     private fun ensureMessagesConfig(configPath: Path) {
         val messagesPath = apiDataPath.resolve("messages.yml")
 
@@ -329,16 +396,9 @@ object MiniGamesCore {
                     msg.set("messages.matchmaking.start.announce.ready_message", cfg.getString("matchmaking.start.announce.ready_message"))
                 }
 
-                // Teamselect GUI title + team names
+                // Teamselect GUI title
                 if (cfg.contains("teamselect.title") && !msg.contains("ui.teamselect.title")) {
                     msg.set("ui.teamselect.title", cfg.getString("teamselect.title"))
-                }
-                for (i in 1..16) {
-                    val p = "teamselect.teams.$i.name"
-                    val np = "ui.teamselect.teams.$i.name"
-                    if (cfg.contains(p) && !msg.contains(np)) {
-                        msg.set(np, cfg.getString(p))
-                    }
                 }
 
                 // Lobby hotbar item names/lore/deny
@@ -506,7 +566,42 @@ object MiniGamesCore {
     }
 
     private fun loadDependencies() {
-        // Placeholder for future optional dependency loading (e.g. LibreLogin UUID resolver).
+        tryRegisterVoiceChat()
+        tryRegisterPlaceholderApi()
+
+        // Hosts that shade MAPI may not declare voicechat/PlaceholderAPI in their own
+        // plugin.yml softdepend, so those plugins enable AFTER us. Catch them here.
+        Bukkit.getPluginManager().registerEvents(object : Listener {
+            @EventHandler
+            fun onPluginEnable(event: PluginEnableEvent) {
+                when (event.plugin.name) {
+                    "voicechat" -> tryRegisterVoiceChat()
+                    "PlaceholderAPI" -> tryRegisterPlaceholderApi()
+                }
+            }
+        }, plugin)
+    }
+
+    private fun tryRegisterVoiceChat() {
+        try {
+            if (Bukkit.getPluginManager().getPlugin("voicechat") != null) {
+                ru.joutak.minigames.integration.voicechat.VoiceChatIntegration
+                    .tryInitialize(plugin, configuration)
+            }
+        } catch (t: Throwable) {
+            plugin.logger.warning("[MiniGamesAPI] Failed to load SimpleVoiceChat integration: ${t.message}")
+        }
+    }
+
+    private fun tryRegisterPlaceholderApi() {
+        try {
+            if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+                ru.joutak.minigames.integration.placeholderapi.PlaceholderApiIntegration
+                    .tryInitialize(plugin)
+            }
+        } catch (t: Throwable) {
+            plugin.logger.warning("[MiniGamesAPI] Failed to load PlaceholderAPI integration: ${t.message}")
+        }
     }
 
     private fun registerEvents() {
@@ -563,7 +658,7 @@ object MiniGamesCore {
     private const val DEFAULT_API_CONFIG: String = """
 minigamesapi:
   # Service marker to distinguish API config from mode configs.
-  config_version: 3
+  config_version: 4
 
 mode:
   # Short logical key used for DB (mode_key) and internal identifiers.
@@ -643,22 +738,32 @@ lobby:
 
 teamselect:
   teams:
-    "1": { material: RED_WOOL, color: RED }
-    "2": { material: YELLOW_WOOL, color: YELLOW }
-    "3": { material: GREEN_WOOL, color: GREEN }
-    "4": { material: BLUE_WOOL, color: BLUE }
-    "5": { material: CYAN_WOOL, color: AQUA }
-    "6": { material: PURPLE_WOOL, color: LIGHT_PURPLE }
-    "7": { material: ORANGE_WOOL, color: GOLD }
-    "8": { material: LIGHT_BLUE_WOOL, color: DARK_AQUA }
-    "9": { material: WHITE_WOOL, color: WHITE }
-    "10": { material: BLACK_WOOL, color: BLACK }
-    "11": { material: MAGENTA_WOOL, color: DARK_PURPLE }
-    "12": { material: LIME_WOOL, color: DARK_GREEN }
-    "13": { material: PINK_WOOL, color: LIGHT_PURPLE }
-    "14": { material: BROWN_WOOL, color: DARK_RED }
-    "15": { material: GRAY_WOOL, color: GRAY }
-    "16": { material: LIGHT_GRAY_WOOL, color: DARK_GRAY }
+    "1":  { material: RED_WOOL,         color: RED,          name: "&cКоманда 1" }
+    "2":  { material: YELLOW_WOOL,      color: YELLOW,       name: "&eКоманда 2" }
+    "3":  { material: GREEN_WOOL,       color: GREEN,        name: "&aКоманда 3" }
+    "4":  { material: BLUE_WOOL,        color: BLUE,         name: "&9Команда 4" }
+    "5":  { material: CYAN_WOOL,        color: AQUA,         name: "&bКоманда 5" }
+    "6":  { material: PURPLE_WOOL,      color: LIGHT_PURPLE, name: "&dКоманда 6" }
+    "7":  { material: ORANGE_WOOL,      color: GOLD,         name: "&6Команда 7" }
+    "8":  { material: LIGHT_BLUE_WOOL,  color: DARK_AQUA,    name: "&3Команда 8" }
+    "9":  { material: WHITE_WOOL,       color: WHITE,        name: "&fКоманда 9" }
+    "10": { material: BLACK_WOOL,       color: BLACK,        name: "&0Команда 10" }
+    "11": { material: MAGENTA_WOOL,     color: DARK_PURPLE,  name: "&5Команда 11" }
+    "12": { material: LIME_WOOL,        color: DARK_GREEN,   name: "&2Команда 12" }
+    "13": { material: PINK_WOOL,        color: LIGHT_PURPLE, name: "&dКоманда 13" }
+    "14": { material: BROWN_WOOL,       color: DARK_RED,     name: "&4Команда 14" }
+    "15": { material: GRAY_WOOL,        color: GRAY,         name: "&7Команда 15" }
+    "16": { material: LIGHT_GRAY_WOOL,  color: DARK_GRAY,    name: "&8Команда 16" }
+
+voicechat:
+  # Set to false to disable per-team voice grouping even if SVC is installed.
+  enabled: true
+  # Group type: NORMAL | OPEN | ISOLATED. ISOLATED = team hears ONLY each other.
+  group_type: "ISOLATED"
+  # Group name template. Placeholders: {mode_display}, {team_index} (1-based), {team_name}.
+  group_name_pattern: "{mode_display} • {team_name}"
+  # If false, groups auto-delete when the last participant leaves.
+  persistent: false
 """
 
     private const val DEFAULT_MESSAGES_CONFIG: String = """
@@ -741,23 +846,6 @@ messages:
 ui:
   teamselect:
     title: "&8Выбор команды"
-    teams:
-      "1": { name: "&cКоманда 1" }
-      "2": { name: "&eКоманда 2" }
-      "3": { name: "&aКоманда 3" }
-      "4": { name: "&9Команда 4" }
-      "5": { name: "&bКоманда 5" }
-      "6": { name: "&dКоманда 6" }
-      "7": { name: "&6Команда 7" }
-      "8": { name: "&3Команда 8" }
-      "9": { name: "&fКоманда 9" }
-      "10": { name: "&0Команда 10" }
-      "11": { name: "&5Команда 11" }
-      "12": { name: "&2Команда 12" }
-      "13": { name: "&dКоманда 13" }
-      "14": { name: "&4Команда 14" }
-      "15": { name: "&7Команда 15" }
-      "16": { name: "&8Команда 16" }
 
   lobby:
     items:
