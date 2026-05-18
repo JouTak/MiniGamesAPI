@@ -11,10 +11,13 @@ import ru.joutak.minigames.managers.MatchmakingManager
 /**
  * %joutak_games_team_index%, %joutak_games_team_color%, %joutak_games_team_name%,
  * %joutak_games_mode_name%, %joutak_games_mode_display%.
+ *
+ * PAPI routes by splitting on the first '_', so the registered identifier must be "joutak".
+ * Params arrive as "games_<name>" and we strip the prefix before dispatching.
  */
 internal class MiniGamesPlaceholders(private val plugin: JavaPlugin) : PlaceholderExpansion() {
 
-    override fun getIdentifier(): String = "joutak_games"
+    override fun getIdentifier(): String = "joutak"
 
     override fun getAuthor(): String = plugin.description.authors.joinToString(", ").ifEmpty { "JouTak" }
 
@@ -23,7 +26,10 @@ internal class MiniGamesPlaceholders(private val plugin: JavaPlugin) : Placehold
     override fun persist(): Boolean = true
 
     override fun onRequest(player: OfflinePlayer?, params: String): String? {
-        when (params.lowercase()) {
+        if (!params.startsWith("games_")) return null
+        val p = params.removePrefix("games_")
+
+        when (p.lowercase()) {
             "mode_name" -> return safe { MiniGamesAPI.config.get(ConfigKeys.MODE_NAME) } ?: ""
             "mode_display" -> return safe { MiniGamesAPI.config.get(ConfigKeys.MODE_DISPLAY_NAME) } ?: ""
         }
@@ -38,13 +44,13 @@ internal class MiniGamesPlaceholders(private val plugin: JavaPlugin) : Placehold
             val started = active.filter { it.started }
             val mine = started.firstOrNull { it.hasActivePlayer(uuid) }
             MiniGamesCore.plugin.logger.info(
-                "[joutak_games] empty for ${online.name} ($uuid) param=$params  " +
+                "[joutak_games] empty for ${online.name} ($uuid) param=$p  " +
                     "active=${active.size} started=${started.size} hasActive=${mine != null}  " +
                     "teamIdx=${mine?.getActiveTeamIndex(uuid)}  lobbyIdx=${MiniGamesAPI.getPlayerTeamInLobby(online)}"
             )
         }
 
-        return when (params.lowercase()) {
+        return when (p.lowercase()) {
             "team_index" -> style?.teamNumber?.toString() ?: ""
             "team_color" -> style?.chatColor?.let { "&${it.char}" } ?: ""
             "team_name" -> style?.displayNamePlain ?: ""
