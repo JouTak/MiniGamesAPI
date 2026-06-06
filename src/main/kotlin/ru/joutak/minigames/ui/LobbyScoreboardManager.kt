@@ -234,6 +234,20 @@ object LobbyScoreboardManager {
             return trimToSidebarLimit(lines)
         }
 
+        if (instance.config.isSoloMode) {
+            val waitingPlayers = instance.teams.flatten()
+            val maxPlayers = instance.config.maxPlayers
+
+            lines += "&aОчередь &7(${waitingPlayers.size}/$maxPlayers)"
+            if (waitingPlayers.isEmpty()) {
+                lines += "&8- &7пусто"
+            } else {
+                lines += "&8- &f" + waitingPlayers.joinToString(", ") { it.name }.limitVisible(42)
+            }
+
+            return trimToSidebarLimit(lines)
+        }
+
         val maxPerTeam = instance.config.playersPerTeam
 
         instance.teams.forEachIndexed { index, team ->

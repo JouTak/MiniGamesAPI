@@ -169,6 +169,7 @@ object MiniGamesCore {
         migrateApiConfigV2(configPath)
         migrateApiConfigV3(configPath)
         migrateApiConfigV4(configPath)
+        migrateApiConfigV5(configPath)
 
         plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
 
@@ -367,6 +368,31 @@ object MiniGamesCore {
             if (messagesChanged) msg?.save(msgFile)
         } catch (t: Throwable) {
             plugin.logger.severe("Failed to migrate MiniGamesAPI config to v4: ${t.message}")
+        }
+    }
+
+    private fun migrateApiConfigV5(configPath: Path) {
+        try {
+            val configFile = configPath.toFile()
+            if (!configFile.exists()) return
+            val cfg = YamlConfiguration.loadConfiguration(configFile)
+
+            val version = cfg.getInt("minigamesapi.config_version", 1)
+            var configChanged = false
+
+            if (!cfg.contains("matchmaking.mode")) {
+                cfg.set("matchmaking.mode", "TEAM")
+                configChanged = true
+            }
+
+            if (version < 5) {
+                cfg.set("minigamesapi.config_version", 5)
+                configChanged = true
+            }
+
+            if (configChanged) cfg.save(configFile)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to migrate MiniGamesAPI config to v5: ${t.message}")
         }
     }
 
@@ -658,7 +684,7 @@ object MiniGamesCore {
     private const val DEFAULT_API_CONFIG: String = """
 minigamesapi:
   # Service marker to distinguish API config from mode configs.
-  config_version: 4
+  config_version: 5
 
 mode:
   # Short logical key used for DB (mode_key) and internal identifiers.
@@ -702,6 +728,10 @@ tournament:
 
 
 matchmaking:
+  # TEAM — обычный командный режим с /teamselect.
+  # SOLO — одиночный режим: /teamselect скрыт, /ready добавляет игрока напрямую.
+  mode: "TEAM"
+
   start:
     enabled: false
     min_fill_percent: 1.0
@@ -776,6 +806,7 @@ messages:
 
   join:
     help: "&7Команды: &a/ready&7, &b/teamselect&7, &c/unready"
+    help_solo: "&7Одиночный режим: &a/ready&7 — встать в очередь, &c/unready&7 — выйти из очереди."
     help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby"
     help_tournament_elo: "&7Квалификация (ELO): команды назначаются организаторами. Матчи собираются автоматически, попытки не ограничены (минимум 3). Команды: &e/forceready&7, &c/unready&7, &e/lobby"
 
@@ -818,6 +849,7 @@ messages:
     no_free_slots: "&cНет свободных слотов."
     failed: "&cНе удалось добавить вас в очередь."
     added: "&aВы добавлены в очередь. Команда: &f{team}"
+    added_solo: "&aВы добавлены в очередь."
 
   unready:
     removed: "&aВы покинули очередь."
@@ -830,6 +862,7 @@ messages:
     match_already_started: "&cМатч уже начался."
     team_full: "&cКоманда заполнена."
     added: "&aВы выбрали команду &f{team}&a."
+    disabled_solo: "&cВ одиночном режиме выбор команды отключён. Используйте &a/ready&c."
 
   forcerun:
     no_instances: "&cНет активных инстансов."

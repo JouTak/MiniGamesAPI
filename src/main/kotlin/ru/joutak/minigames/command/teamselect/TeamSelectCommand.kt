@@ -41,7 +41,6 @@ object TeamSelectCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
             return
         }
 
-
         if (MatchmakingManager.isPlayerInStartedGame(uuid)) {
             player.sendMessage(Component.text("Сейчас вы в игре. Нельзя выбирать команду.", NamedTextColor.RED))
             return
@@ -57,6 +56,11 @@ object TeamSelectCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
 
         if (instance == null) {
             player.sendMessage(Component.text("Нет свободных арен. Ожидайте.", NamedTextColor.YELLOW))
+            return
+        }
+
+        if (instance.config.isSoloMode) {
+            player.sendMessage(Messages.prefixedComponent("messages.teamselect.disabled_solo"))
             return
         }
 

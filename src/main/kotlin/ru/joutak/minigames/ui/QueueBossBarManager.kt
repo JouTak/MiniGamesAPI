@@ -59,7 +59,7 @@ object QueueBossBarManager {
         }
 
         val waiting = best?.teams?.sumOf { it.size } ?: 0
-        val maxPlayers = best?.let { max(1, it.config.teamCount * it.config.playersPerTeam) } ?: 1
+        val maxPlayers = best?.let { max(1, it.config.maxPlayers) } ?: 1
 
         val placeholders = mapOf(
             "current" to waiting.toString(),
