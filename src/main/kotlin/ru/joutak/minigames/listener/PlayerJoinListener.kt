@@ -112,6 +112,9 @@ object PlayerJoinListener : Listener {
 
                     player.sendMessage(Messages.prefixedComponent(key))
                 }
+                MatchmakingManager.isSoloMode() -> {
+                    player.sendMessage(Messages.prefixedComponent("messages.join.help_solo"))
+                }
                 else -> {
                     player.sendMessage(Messages.prefixedComponent("messages.join.help"))
                 }

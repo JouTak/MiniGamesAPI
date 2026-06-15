@@ -122,6 +122,7 @@ object LobbyItemsManager {
         val inv = player.inventory
 
         val tournament = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
+        val teamSelectionAvailable = MatchmakingManager.isTeamSelectionAvailable()
 
         for (def in hotbarItems) {
             if (!def.enabled) continue
@@ -129,6 +130,9 @@ object LobbyItemsManager {
 
             // In tournament mode, players should not use manual ready / team selection.
             if (tournament && (def.action == LobbyAction.Ready || def.action == LobbyAction.TeamSelect)) continue
+
+            // In solo mode, team selection is intentionally hidden: /ready joins the solo queue directly.
+            if (!teamSelectionAvailable && def.action == LobbyAction.TeamSelect) continue
 
             placeFixed(inv, def.slot, def.item.clone())
         }

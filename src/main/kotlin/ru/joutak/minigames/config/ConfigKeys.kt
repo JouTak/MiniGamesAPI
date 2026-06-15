@@ -157,6 +157,18 @@ object ConfigKeys {
     val STORAGE_CLOSE_TIMEOUT_MILLIS = object : ConfigKey<Long>("storage.close_timeout_millis", 5000) {}
 
     /**
+     * Lobby matchmaking mode.
+     *
+     * TEAM - normal team games: /teamselect is enabled and /ready auto-balances by teams.
+     * SOLO - solo games: /teamselect is disabled and every /ready player gets a separate technical slot.
+     */
+    val MATCHMAKING_MODE = object : ConfigKey<String>("matchmaking.mode", "TEAM") {
+        override fun validate(value: String) {
+            require(value.uppercase() in setOf("TEAM", "SOLO")) { "matchmaking.mode must be TEAM or SOLO" }
+        }
+    }
+
+    /**
      * Allows starting a match when the instance isn't full, but has enough players/teams.
      * This is useful for modes like BedWars/CreakyWars.
      */

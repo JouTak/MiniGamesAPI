@@ -9,6 +9,7 @@ import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.domain.GameInstance
 import ru.joutak.minigames.domain.GameInstanceConfig
 import ru.joutak.minigames.domain.GameQueue
+import ru.joutak.minigames.domain.MatchmakingMode
 import ru.joutak.minigames.event.GameInstanceReadyEvent
 import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.ui.QueueBossBarManager
@@ -81,8 +82,10 @@ object MatchmakingManager {
         // Per-config override (optional): meta["pool_size"] = Int
         for (cfg in configs) {
             val perConfig = ((cfg.meta["pool_size"] as? Number)?.toInt() ?: globalPoolSize).coerceAtLeast(1)
+            val resolvedMode = resolveMatchmakingMode(cfg)
+            val resolvedCfg = if (cfg.matchmakingMode == resolvedMode) cfg else cfg.copy(matchmakingMode = resolvedMode)
             repeat(perConfig) {
-                activeInstances += GameInstance(cfg)
+                activeInstances += GameInstance(resolvedCfg)
             }
         }
 
@@ -91,6 +94,47 @@ object MatchmakingManager {
     }
 
     fun getActiveInstances(): List<GameInstance> = activeInstances.toList()
+
+    fun getMatchmakingMode(): MatchmakingMode =
+        MatchmakingMode.from(MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_MODE))
+
+    fun isSoloMode(): Boolean = getMatchmakingMode() == MatchmakingMode.SOLO
+
+    fun isTeamSelectionAvailable(): Boolean {
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) return false
+
+        val waitingInstances = activeInstances.filter { !it.started }
+        if (waitingInstances.isEmpty()) {
+            // Before a mode loads its arenas, fall back to the global config.
+            return !isSoloMode()
+        }
+
+        return waitingInstances.any { !it.config.isSoloMode }
+    }
+
+    private fun resolveMatchmakingMode(config: GameInstanceConfig): MatchmakingMode {
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            // Tournament matchmaking is team-based: slots are bound to tournament team_key.
+            return MatchmakingMode.TEAM
+        }
+
+        val fromMeta = config.meta["matchmaking_mode"]
+            ?: config.meta["matchmakingMode"]
+            ?: config.meta["queue_mode"]
+            ?: config.meta["queueMode"]
+            ?: config.meta["solo"]?.let { raw ->
+                when (raw) {
+                    is Boolean -> if (raw) "SOLO" else "TEAM"
+                    else -> raw
+                }
+            }
+
+        return if (fromMeta != null) {
+            MatchmakingMode.from(fromMeta)
+        } else {
+            getMatchmakingMode()
+        }
+    }
 
     fun isPlayerInStartedGame(uuid: UUID): Boolean {
         return activeInstances.any { it.started && it.hasActivePlayer(uuid) }
@@ -523,7 +567,7 @@ object MatchmakingManager {
 
     private fun getPartialStartInfo(instance: GameInstance): PartialStartInfo {
         val enabled = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_ENABLED)
-        val maxPlayers = max(1, instance.config.teamCount * instance.config.playersPerTeam)
+        val maxPlayers = max(1, instance.config.maxPlayers)
         val waitingPlayers = instance.teams.sumOf { it.size }
         val waitingTeams = instance.teams.count { it.isNotEmpty() }
 
@@ -532,7 +576,11 @@ object MatchmakingManager {
         val requiredPlayers = min(maxPlayers, max(1, requiredByPercent))
 
         val cfgMinTeams = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_MIN_TEAMS)
-        val requiredTeams = min(instance.config.teamCount, max(1, cfgMinTeams))
+        val requiredTeams = if (instance.config.isSoloMode) {
+            1
+        } else {
+            min(instance.config.teamCount, max(1, cfgMinTeams))
+        }
 
         val delaySeconds = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_START_DELAY_SECONDS)
 
