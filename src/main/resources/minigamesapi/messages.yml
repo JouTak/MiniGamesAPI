@@ -12,6 +12,7 @@ messages:
 
   join:
     help: '&7Команды: &a/ready&7, &b/teamselect&7, &c/unready'
+    help_solo: '&7Одиночный режим: &a/ready&7 — встать в очередь, &c/unready&7 — выйти из очереди.'
     help_tournament: '&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
     help_tournament_elo: '&7Квалификация Elo: играйте сколько угодно. Команды: &e/forceready&7, &c/unready&7, &e/lobby'
 
@@ -60,6 +61,7 @@ messages:
     no_free_slots: '&cНет свободных слотов.'
     failed: '&cНе удалось добавить вас в очередь.'
     added: '&aВы добавлены в очередь. Команда: &f{team}'
+    added_solo: '&aВы добавлены в очередь.'
 
   unready:
     removed: '&aВы покинули очередь.'
@@ -72,6 +74,7 @@ messages:
     match_already_started: '&cМатч уже начался.'
     team_full: '&cКоманда заполнена.'
     added: '&aВы выбрали команду &f{team}&a.'
+    disabled_solo: '&cВ одиночном режиме выбор команды отключён. Используйте &a/ready&c.'
 
   forcerun:
     no_instances: '&cНет активных инстансов.'

@@ -12,13 +12,13 @@ class GameInstance(val config: GameInstanceConfig) {
      * Teams list is used ONLY for lobby/waiting phase (team picking / queue filling).
      * Many minigames (e.g. Splatoon) clear these lists on match start.
      */
-    val teams = MutableList(config.teamCount) { mutableListOf<Player>() }
+    val teams = MutableList(config.waitingGroupCount) { mutableListOf<Player>() }
 
     /**
      * Tournament-only mapping: teamIndex -> tournament team_key (for results / roster binding).
      * It is maintained by the tournament auto-matchmaking logic.
      */
-    val tournamentTeamKeys: MutableList<String?> = MutableList(config.teamCount) { null }
+    val tournamentTeamKeys: MutableList<String?> = MutableList(config.waitingGroupCount) { null }
 
     /**
      * Round-robin cursor for /ready (and lobby hotbar READY action).
@@ -51,7 +51,7 @@ class GameInstance(val config: GameInstanceConfig) {
         // Prevent duplicates across teams
         removeFromWaitingTeams(player.uniqueId)
 
-        val availableTeams = teams.filter { it.size < config.playersPerTeam }
+        val availableTeams = teams.filter { it.size < config.waitingGroupCapacity }
         if (availableTeams.isEmpty()) return false
 
         val targetTeam = availableTeams.minByOrNull { it.size } ?: return false
@@ -72,7 +72,7 @@ class GameInstance(val config: GameInstanceConfig) {
         val n = teams.size
         for (offset in 0 until n) {
             val idx = (readyRoundRobinCursor + offset) % n
-            if (teams[idx].size < config.playersPerTeam) {
+            if (teams[idx].size < config.waitingGroupCapacity) {
                 readyRoundRobinCursor = (idx + 1) % n
                 return idx
             }
@@ -90,7 +90,7 @@ class GameInstance(val config: GameInstanceConfig) {
         removeFromWaitingTeams(player.uniqueId)
 
         val team = teams[teamIndex]
-        if (team.size >= config.playersPerTeam) return false
+        if (team.size >= config.waitingGroupCapacity) return false
 
         team.add(player)
         QueueBossBarManager.updateAll()
@@ -111,7 +111,7 @@ class GameInstance(val config: GameInstanceConfig) {
         return removed
     }
 
-    fun isFull(): Boolean = !started && teams.all { it.size >= config.playersPerTeam }
+    fun isFull(): Boolean = !started && teams.all { it.size >= config.waitingGroupCapacity }
 
     /**
      * Transition instance to started state and snapshot all waiting-team players as active match participants.

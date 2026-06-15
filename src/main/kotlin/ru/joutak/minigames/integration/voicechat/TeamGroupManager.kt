@@ -35,6 +35,8 @@ object TeamGroupManager {
     fun isReady(): Boolean = api != null
 
     fun assignTeamsToGroups(instance: GameInstance) {
+        if (instance.config.isSoloMode) return
+
         val api = this.api ?: return
 
         val cfg = MiniGamesCore.configuration

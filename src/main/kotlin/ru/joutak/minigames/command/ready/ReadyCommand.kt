@@ -31,8 +31,9 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
     }
 
     /**
-     * "Быстрое добавление" — round-robin по командам (а не "первая свободная"),
-     * чтобы при большом числе команд игроки распределялись равномерно.
+     * "Быстрое добавление":
+     * - TEAM режим: round-robin по командам, чтобы игроки распределялись равномерно;
+     * - SOLO режим: игрок попадает в отдельный технический слот без выбора команды.
      * Возвращает true, если игрок был добавлен в ожидание.
      */
     fun performReady(player: Player): Boolean {
@@ -60,19 +61,32 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
             return false
         }
 
-        // Round-robin по командам.
-        val teamIndex = instance.pickTeamIndexRoundRobin()
-        if (teamIndex == null) {
-            player.sendMessage(Component.text("Нет свободных мест в командах. Ожидайте.", NamedTextColor.YELLOW))
-            return false
-        }
-
         // Если игрок был в очереди выбора команды — снимаем.
         GameQueue.removePlayer(player)
 
+        if (instance.config.isSoloMode) {
+            val added = instance.addPlayer(player)
+            if (!added) {
+                player.sendMessage(Messages.prefixedComponent("messages.ready.failed"))
+                return false
+            }
+
+            MatchmakingManager.checkReady(instance)
+            QueueBossBarManager.updateAll()
+            player.sendMessage(Messages.prefixedComponent("messages.ready.added_solo"))
+            return true
+        }
+
+        // Round-robin по командам.
+        val teamIndex = instance.pickTeamIndexRoundRobin()
+        if (teamIndex == null) {
+            player.sendMessage(Messages.prefixedComponent("messages.ready.no_free_slots"))
+            return false
+        }
+
         val added = instance.addPlayerToTeamIndex(player, teamIndex)
         if (!added) {
-            player.sendMessage(Component.text("Не удалось встать в очередь. Попробуйте ещё раз.", NamedTextColor.RED))
+            player.sendMessage(Messages.prefixedComponent("messages.ready.failed"))
             return false
         }
 
@@ -80,9 +94,9 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
         QueueBossBarManager.updateAll()
 
         player.sendMessage(
-            Component.text(
-                "Вы добавлены в очередь за команду ${teamIndex + 1}!",
-                NamedTextColor.GREEN
+            Messages.prefixedComponent(
+                "messages.ready.added",
+                mapOf("team" to (teamIndex + 1).toString())
             )
         )
 
