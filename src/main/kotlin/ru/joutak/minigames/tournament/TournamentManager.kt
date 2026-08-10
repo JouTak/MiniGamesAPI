@@ -1126,7 +1126,7 @@ object TournamentManager {
                     "rating" to formatInt(ta.ratingAfter),
                     "delta" to formatSignedInt(ta.delta),
                     "place" to ta.place.toString(),
-                    "paint_percent" to formatPercent(ta.paintPercent)
+                    "score" to (ta.score?.let(::formatScore) ?: "-")
                 )
 
                 val msg = Messages.prefixedComponent("messages.tournament.elo_rating_update", placeholders)
@@ -1153,7 +1153,7 @@ object TournamentManager {
         return if (r >= 0) "+$r" else r.toString()
     }
 
-    private fun formatPercent(v: Double): String {
+    private fun formatScore(v: Double): String {
         val r = kotlin.math.round(v * 10.0) / 10.0
         return if (r == kotlin.math.round(r)) r.toInt().toString() else r.toString()
     }

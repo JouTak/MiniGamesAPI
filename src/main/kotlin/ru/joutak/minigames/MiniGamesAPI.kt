@@ -14,6 +14,7 @@ import ru.joutak.minigames.event.MatchResultRecordingEvent
 import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchResult
+import ru.joutak.minigames.results.model.Metric
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
 import ru.joutak.minigames.tournament.TournamentManager
 import java.io.File
@@ -47,9 +48,17 @@ object MiniGamesAPI {
     fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
         runOnMainThread { Bukkit.getPluginManager().callEvent(MatchResultRecordingEvent(result)) }
 
-        // Tournament progress must update even if results storage is disabled.
-        // IMPORTANT: modes are responsible for any post-game ceremony/teleports.
-        val tournamentFuture = TournamentManager.applyMatchResult(result)
+        val resultsFuture = ResultsManager.recordMatch(result)
+
+        // Recalculation must run after persistence, otherwise the just-finished match may be absent
+        // from the qualifier snapshot. Tournament progress still updates when storage is disabled
+        // or when recording failed.
+        val tournamentFuture = if (ResultsManager.isEnabled()) {
+            resultsFuture.handle { _, _ -> null }
+                .thenCompose { TournamentManager.applyMatchResult(result) }
+        } else {
+            TournamentManager.applyMatchResult(result)
+        }
 
         if (TournamentManager.isEnabled() && TournamentManager.isPostMatchKickParticipantsEnabled()) {
             tournamentFuture.thenAccept { ok ->
@@ -59,7 +68,31 @@ object MiniGamesAPI {
             }
         }
 
-        return ResultsManager.recordMatch(result)
+        return resultsFuture
+    }
+
+    /**
+     * Records a result and injects tournament competitor keys into team metrics.
+     * Existing `team_key` metrics win over values supplied by [teamKeysByTeamId].
+     */
+    fun recordMatchResult(
+        result: MatchResult,
+        teamKeysByTeamId: Map<Int, String>,
+    ): CompletableFuture<Boolean> {
+        if (teamKeysByTeamId.isEmpty()) return recordMatchResult(result)
+
+        val enriched = result.copy(
+            teams = result.teams.map { team ->
+                if (team.metrics.any { it.key == "team_key" && !it.valueText.isNullOrBlank() }) {
+                    team
+                } else {
+                    val teamKey = teamKeysByTeamId[team.teamId]?.trim().orEmpty()
+                    if (teamKey.isBlank()) team
+                    else team.copy(metrics = team.metrics + Metric.text("team_key", teamKey))
+                }
+            }
+        )
+        return recordMatchResult(enriched)
     }
 
     fun isTournamentEnabled(): Boolean = TournamentManager.isEnabled()

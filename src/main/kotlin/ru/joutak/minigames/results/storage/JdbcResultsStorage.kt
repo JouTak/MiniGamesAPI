@@ -4,6 +4,7 @@ import ru.joutak.minigames.results.model.MatchResult
 import ru.joutak.minigames.results.model.MatchTeamsSnapshot
 import ru.joutak.minigames.results.model.Metric
 import ru.joutak.minigames.results.model.TeamMetricsSnapshot
+import ru.joutak.minigames.results.model.CompletionStatus
 import ru.joutak.minigames.results.model.TopPlayerIntMetric
 import java.sql.Connection
 import java.sql.DriverManager
@@ -280,7 +281,9 @@ class JdbcResultsStorage(
             """.trimIndent()
         ).use { ps ->
             for (t in result.teams) {
-                for (m in t.metrics) {
+                val metrics = t.metrics.filterNot { it.key == COMPLETION_STATUS_METRIC_KEY } +
+                    Metric.text(COMPLETION_STATUS_METRIC_KEY, t.completionStatus.name)
+                for (m in metrics) {
                     ps.setString(1, result.matchId.toString())
                     ps.setInt(2, t.teamId)
                     ps.setString(3, m.key)
@@ -458,14 +461,19 @@ class JdbcResultsStorage(
                             val vIntObj = rs.getObject(7)
                             val vRealObj = rs.getObject(8)
                             val vText = rs.getString(9)
-                            acc.metrics.add(
-                                Metric(
-                                    key = metricKey,
-                                    valueInt = (vIntObj as? Number)?.toLong(),
-                                    valueReal = (vRealObj as? Number)?.toDouble(),
-                                    valueText = vText,
+                            if (metricKey == COMPLETION_STATUS_METRIC_KEY) {
+                                acc.completionStatus = runCatching { CompletionStatus.valueOf(vText) }
+                                    .getOrDefault(CompletionStatus.FINISHED)
+                            } else {
+                                acc.metrics.add(
+                                    Metric(
+                                        key = metricKey,
+                                        valueInt = (vIntObj as? Number)?.toLong(),
+                                        valueReal = (vRealObj as? Number)?.toDouble(),
+                                        valueText = vText,
+                                    )
                                 )
-                            )
+                            }
                         }
                     }
                 }
@@ -482,6 +490,7 @@ class JdbcResultsStorage(
                         isWinner = acc.isWinner,
                         score = acc.score,
                         metrics = acc.metrics.toList(),
+                        completionStatus = acc.completionStatus,
                     )
                 }
                 out.add(MatchTeamsSnapshot(id, ended, teams))
@@ -507,8 +516,13 @@ class JdbcResultsStorage(
         var placement: Int? = null,
         var isWinner: Boolean = false,
         var score: Double? = null,
+        var completionStatus: CompletionStatus = CompletionStatus.FINISHED,
         val metrics: MutableList<Metric> = mutableListOf(),
     )
+
+    private companion object {
+        const val COMPLETION_STATUS_METRIC_KEY = "minigamesapi.completion_status"
+    }
 
     override fun close() {
         // no-op: we open a new connection per operation

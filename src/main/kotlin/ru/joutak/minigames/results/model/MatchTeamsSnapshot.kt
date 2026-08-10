@@ -18,4 +18,5 @@ data class TeamMetricsSnapshot(
     val isWinner: Boolean = false,
     val score: Double? = null,
     val metrics: List<Metric> = emptyList(),
+    val completionStatus: CompletionStatus = CompletionStatus.FINISHED,
 )

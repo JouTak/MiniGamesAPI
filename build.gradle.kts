@@ -56,7 +56,10 @@ tasks.build {
 }
 
 tasks.jar {
-    enabled = false
+    // Required by Gradle composite builds used by local minigame projects.
+    // Publishing still explicitly uses shadowJar below.
+    enabled = true
+    archiveClassifier.set("plain")
 }
 
 tasks.processResources {

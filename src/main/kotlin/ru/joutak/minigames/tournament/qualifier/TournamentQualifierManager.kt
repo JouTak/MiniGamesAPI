@@ -10,6 +10,7 @@ import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.results.ResultsManager
 import ru.joutak.minigames.results.model.MatchTeamsSnapshot
 import ru.joutak.minigames.results.model.Metric
+import ru.joutak.minigames.results.model.CompletionStatus
 import ru.joutak.minigames.tournament.qualifier.model.QualifierMatchAudit
 import ru.joutak.minigames.tournament.qualifier.model.QualifierMatchTeamAudit
 import ru.joutak.minigames.tournament.qualifier.model.QualifierSnapshot
@@ -312,23 +313,23 @@ object TournamentQualifierManager {
             ?: return listOf(Component.text("No qualifier snapshot. Run /itmocraft qualifier recalc", NamedTextColor.RED))
 
         val minMatches = config.minMatches
-        val rows = if (includeIncomplete) snap.rows else snap.rows.filter { it.matchesCount >= minMatches }
+        val rows = if (includeIncomplete) snap.rows else snap.rows.filter { it.completedMatches >= minMatches }
         if (rows.isEmpty()) {
             return listOf(Component.text("No teams to display", NamedTextColor.DARK_GRAY))
         }
 
         val out = ArrayList<Component>(minOf(limit, rows.size) + 4)
         out.add(Component.text("Qualifier rating (stage=${snap.stage})", NamedTextColor.AQUA))
-        out.add(Component.text("# team_key | elo | matches | avgPlace | bestPaint", NamedTextColor.GRAY))
+        out.add(Component.text("# team_key | elo | completed/total | avgPlace | bestScore", NamedTextColor.GRAY))
 
         val shown = rows.take(limit.coerceAtLeast(1))
         for ((idx, row) in shown.withIndex()) {
-            val need = (minMatches - row.matchesCount).coerceAtLeast(0)
+            val need = (minMatches - row.completedMatches).coerceAtLeast(0)
             val suffix = if (need > 0) "  NOT QUALIFIED (need $need more)" else ""
 
             out.add(
                 Component.text(
-                    "${idx + 1}. ${row.teamKey} | ${row.eloRating} | ${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatDouble(row.bestPaint)}$suffix",
+                    "${idx + 1}. ${row.teamKey} | ${row.eloRating} | ${row.completedMatches}/${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatNullable(row.bestScore)}$suffix",
                     if (need > 0) NamedTextColor.DARK_GRAY else NamedTextColor.WHITE,
                 )
             )
@@ -355,7 +356,7 @@ object TournamentQualifierManager {
         }
 
         val minMatches = config.minMatches
-        val rows = if (includeIncomplete) snap.rows else snap.rows.filter { it.matchesCount >= minMatches }
+        val rows = if (includeIncomplete) snap.rows else snap.rows.filter { it.completedMatches >= minMatches }
         if (rows.isEmpty()) return listOf(Component.text("No teams to display", NamedTextColor.DARK_GRAY))
 
         val idx = rows.indexOfFirst { it.teamKey.equals(key, ignoreCase = true) }
@@ -365,18 +366,18 @@ object TournamentQualifierManager {
 
         val out = ArrayList<Component>(8)
         out.add(Component.text("Qualifier rating (stage=${snap.stage})", NamedTextColor.AQUA))
-        out.add(Component.text("# team_key | elo | matches | avgPlace | bestPaint", NamedTextColor.GRAY))
+        out.add(Component.text("# team_key | elo | completed/total | avgPlace | bestScore", NamedTextColor.GRAY))
 
         val from = (idx - context).coerceAtLeast(0)
         val to = (idx + context).coerceAtMost(rows.size - 1)
         for (i in from..to) {
             val row = rows[i]
-            val need = (minMatches - row.matchesCount).coerceAtLeast(0)
+            val need = (minMatches - row.completedMatches).coerceAtLeast(0)
             val suffix = if (need > 0) "  NOT QUALIFIED (need $need more)" else ""
             val color = if (i == idx) NamedTextColor.YELLOW else if (need > 0) NamedTextColor.DARK_GRAY else NamedTextColor.WHITE
             out.add(
                 Component.text(
-                    "${i + 1}. ${row.teamKey} | ${row.eloRating} | ${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatDouble(row.bestPaint)}$suffix",
+                    "${i + 1}. ${row.teamKey} | ${row.eloRating} | ${row.completedMatches}/${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatNullable(row.bestScore)}$suffix",
                     color,
                 )
             )
@@ -503,146 +504,110 @@ object TournamentQualifierManager {
 
         private val startRating = cfg.eloStartRating.toDouble()
         private val scale = cfg.eloScale.toDouble().coerceAtLeast(1.0)
-
         private val provisionalMatches = cfg.eloProvisionalMatches.coerceAtLeast(0)
         private val kProvisional = cfg.eloKProvisional.toDouble().coerceAtLeast(0.0)
         private val kStable = cfg.eloKStable.toDouble().coerceAtLeast(0.0)
 
-        private val allowFallbackToScore = cfg.allowFallbackToScore
-        private val allowSingleTeamMatches = cfg.allowSingleTeamMatches
-        private val paintKey = cfg.paintPercentKey.trim().ifBlank { "paint_percent" }
-        private val format = cfg.paintPercentFormat
-
-        // per team aggregates
         private val rating = HashMap<String, Double>()
         private val matches = HashMap<String, Int>()
+        private val completedMatches = HashMap<String, Int>()
+        private val leftMatches = HashMap<String, Int>()
         private val sumPlace = HashMap<String, Double>()
-        private val sumPaint = HashMap<String, Double>()
-        private val bestPaint = HashMap<String, Double>()
+        private val sumScore = HashMap<String, Double>()
+        private val scoreCount = HashMap<String, Int>()
+        private val bestScore = HashMap<String, Double>()
         private val lastMatchAt = HashMap<String, Long>()
-
         private val audit = ArrayList<QualifierMatchAudit>(256)
 
         fun getAudit(): List<QualifierMatchAudit> = audit.toList()
 
         fun applyMatch(snapshot: MatchTeamsSnapshot): Boolean {
-            val teams = ArrayList<MatchTeamInput>(snapshot.teams.size)
-            var hadAnyTeam = false
-
-            for (t in snapshot.teams) {
-                hadAnyTeam = true
-                val teamKey = metricText(t.metrics, TEAM_KEY_METRIC_KEY)?.trim().orEmpty()
-                if (teamKey.isBlank()) continue
-
-                val paintRaw: Double? = metricDouble(t.metrics, paintKey)
-                val paintResolved: Double? = paintRaw ?: if (allowFallbackToScore) t.score else null
-                val paint: Double = paintResolved ?: continue
-
-                val paint0100 = when (format) {
-                    TournamentQualifierConfig.PaintPercentFormat.ZERO_TO_1 -> paint * 100.0
-                    TournamentQualifierConfig.PaintPercentFormat.ZERO_TO_100 -> paint
-                }
-
-                teams.add(MatchTeamInput(teamKey, paint0100.coerceIn(0.0, 100.0)))
+            val entries = snapshot.teams.mapNotNull { team ->
+                val teamKey = metricText(team.metrics, TEAM_KEY_METRIC_KEY)?.trim().orEmpty()
+                val place = team.placement
+                if (teamKey.isBlank() || place == null || place <= 0) null
+                else RatingEntry(teamKey, place, team.score, team.completionStatus)
             }
 
-            if (teams.size < 2 && !(teams.size == 1 && allowSingleTeamMatches)) {
-                val reason = if (!hadAnyTeam || snapshot.teams.size < 2) {
-                    "<2 teams"
-                } else {
-                    "missing team_key/paint_percent"
+            if (entries.size != snapshot.teams.size || entries.size < 2 || entries.map { it.teamKey }.toSet().size != entries.size) {
+                val reason = when {
+                    entries.size < 2 -> "<2 rated competitors"
+                    entries.map { it.teamKey }.toSet().size != entries.size -> "duplicate team_key"
+                    else -> "missing team_key/placement"
                 }
-                audit.add(
-                    QualifierMatchAudit(
-                        matchId = snapshot.matchId,
-                        endedAtMs = snapshot.endedAtMs,
-                        skipped = true,
-                        skippedReason = reason,
-                    )
-                )
+                audit += QualifierMatchAudit(snapshot.matchId, snapshot.endedAtMs, true, reason)
                 return false
             }
 
-            // stable order: paint desc, team_key asc
-            teams.sortWith(compareByDescending<MatchTeamInput> { it.paintPercent }.thenBy { it.teamKey })
-
-            for (i in teams.indices) {
-                teams[i] = teams[i].copy(place = i + 1)
+            for (entry in entries) {
+                rating.putIfAbsent(entry.teamKey, startRating)
+                matches.putIfAbsent(entry.teamKey, 0)
+                completedMatches.putIfAbsent(entry.teamKey, 0)
+                leftMatches.putIfAbsent(entry.teamKey, 0)
+                sumPlace.putIfAbsent(entry.teamKey, 0.0)
             }
 
-            // init state
-            for (t in teams) {
-                rating.putIfAbsent(t.teamKey, startRating)
-                matches.putIfAbsent(t.teamKey, 0)
-                sumPlace.putIfAbsent(t.teamKey, 0.0)
-                sumPaint.putIfAbsent(t.teamKey, 0.0)
-                bestPaint.putIfAbsent(t.teamKey, Double.NEGATIVE_INFINITY)
-            }
+            val before = entries.associate { it.teamKey to (rating[it.teamKey] ?: startRating) }
+            val divisor = (entries.size - 1).toDouble()
+            val deltas = HashMap<String, Double>()
 
-            val ratingBefore = teams.associate { it.teamKey to (rating[it.teamKey] ?: startRating) }
-
-            // compute deltas based on ratings BEFORE this match
-            val delta = HashMap<String, Double>()
-            for (i in teams.indices) {
-                val a = teams[i]
-                val ra = ratingBefore[a.teamKey] ?: startRating
-                val ma = matches[a.teamKey] ?: 0
-                val k = if (ma < provisionalMatches) kProvisional else kStable
-
-                var d = 0.0
-                for (j in teams.indices) {
-                    if (i == j) continue
-                    val b = teams[j]
-                    val rb = ratingBefore[b.teamKey] ?: startRating
-
-                    val s = if (a.place < b.place) 1.0 else 0.0
-                    val e = 1.0 / (1.0 + Math.pow(10.0, (rb - ra) / scale))
-                    d += k * (s - e)
+            for (a in entries) {
+                val ra = before[a.teamKey] ?: startRating
+                val k = if ((matches[a.teamKey] ?: 0) < provisionalMatches) kProvisional else kStable
+                var sum = 0.0
+                for (b in entries) {
+                    if (a === b) continue
+                    val rb = before[b.teamKey] ?: startRating
+                    val actual = actualScore(a, b)
+                    val expected = 1.0 / (1.0 + Math.pow(10.0, (rb - ra) / scale))
+                    sum += actual - expected
                 }
-
-                delta[a.teamKey] = d
+                deltas[a.teamKey] = k * sum / divisor
             }
 
-            // apply deltas + aggregates
-            val auditTeams = ArrayList<QualifierMatchTeamAudit>(teams.size)
-            for (t in teams) {
-                val before = ratingBefore[t.teamKey] ?: startRating
-                val d = delta[t.teamKey] ?: 0.0
-                val after = before + d
-                rating[t.teamKey] = after
-
-                val nextMatches = (matches[t.teamKey] ?: 0) + 1
-                matches[t.teamKey] = nextMatches
-
-                sumPlace[t.teamKey] = (sumPlace[t.teamKey] ?: 0.0) + t.place.toDouble()
-                sumPaint[t.teamKey] = (sumPaint[t.teamKey] ?: 0.0) + t.paintPercent
-
-                val prevBest = bestPaint[t.teamKey] ?: Double.NEGATIVE_INFINITY
-                if (t.paintPercent > prevBest) bestPaint[t.teamKey] = t.paintPercent
-
-                lastMatchAt[t.teamKey] = maxOf(lastMatchAt[t.teamKey] ?: 0L, snapshot.endedAtMs)
-
-                auditTeams.add(
-                    QualifierMatchTeamAudit(
-                        teamKey = t.teamKey,
-                        place = t.place,
-                        paintPercent = t.paintPercent,
-                        ratingBefore = before,
-                        delta = d,
-                        ratingAfter = after,
-                    )
+            val auditEntries = ArrayList<QualifierMatchTeamAudit>(entries.size)
+            for (entry in entries) {
+                val ratingBefore = before[entry.teamKey] ?: startRating
+                val delta = deltas[entry.teamKey] ?: 0.0
+                val ratingAfter = ratingBefore + delta
+                rating[entry.teamKey] = ratingAfter
+                matches[entry.teamKey] = (matches[entry.teamKey] ?: 0) + 1
+                if (entry.completionStatus == CompletionStatus.FINISHED) {
+                    completedMatches[entry.teamKey] = (completedMatches[entry.teamKey] ?: 0) + 1
+                } else {
+                    leftMatches[entry.teamKey] = (leftMatches[entry.teamKey] ?: 0) + 1
+                }
+                sumPlace[entry.teamKey] = (sumPlace[entry.teamKey] ?: 0.0) + entry.place
+                entry.score?.let { score ->
+                    sumScore[entry.teamKey] = (sumScore[entry.teamKey] ?: 0.0) + score
+                    scoreCount[entry.teamKey] = (scoreCount[entry.teamKey] ?: 0) + 1
+                    bestScore[entry.teamKey] = maxOf(bestScore[entry.teamKey] ?: Double.NEGATIVE_INFINITY, score)
+                }
+                lastMatchAt[entry.teamKey] = maxOf(lastMatchAt[entry.teamKey] ?: 0L, snapshot.endedAtMs)
+                auditEntries += QualifierMatchTeamAudit(
+                    teamKey = entry.teamKey,
+                    place = entry.place,
+                    score = entry.score,
+                    completionStatus = entry.completionStatus.name,
+                    ratingBefore = ratingBefore,
+                    delta = delta,
+                    ratingAfter = ratingAfter,
                 )
             }
 
-            audit.add(
-                QualifierMatchAudit(
-                    matchId = snapshot.matchId,
-                    endedAtMs = snapshot.endedAtMs,
-                    skipped = false,
-                    teams = auditTeams,
-                )
-            )
+            audit += QualifierMatchAudit(snapshot.matchId, snapshot.endedAtMs, teams = auditEntries)
             return true
+        }
+
+        private fun actualScore(a: RatingEntry, b: RatingEntry): Double {
+            if (a.completionStatus != b.completionStatus) {
+                return if (a.completionStatus == CompletionStatus.FINISHED) 1.0 else 0.0
+            }
+            return when {
+                a.place < b.place -> 1.0
+                a.place > b.place -> 0.0
+                else -> 0.5
+            }
         }
 
         fun buildSnapshot(
@@ -653,53 +618,37 @@ object TournamentQualifierManager {
             matchesConsidered: Int,
             matchesSkipped: Int,
         ): QualifierSnapshot {
-            val rows = ArrayList<QualifierTeamRow>(rating.size)
-            for ((teamKey, r) in rating) {
-                val m = matches[teamKey] ?: 0
-                if (m <= 0) continue
-
-                val avgPlace = (sumPlace[teamKey] ?: 0.0) / m
-                val avgPaint = (sumPaint[teamKey] ?: 0.0) / m
-                val best = bestPaint[teamKey] ?: 0.0
-                val lastAt = lastMatchAt[teamKey] ?: 0L
-
-                rows.add(
-                    QualifierTeamRow(
-                        teamKey = teamKey,
-                        matchesCount = m,
-                        eloRating = round(r).toInt(),
-                        avgPlace = avgPlace,
-                        avgPaint = avgPaint,
-                        bestPaint = best,
-                        lastMatchAtMs = lastAt,
-                    )
+            val rows = rating.mapNotNull { (teamKey, value) ->
+                val count = matches[teamKey] ?: 0
+                if (count <= 0) return@mapNotNull null
+                val scores = scoreCount[teamKey] ?: 0
+                QualifierTeamRow(
+                    teamKey = teamKey,
+                    matchesCount = count,
+                    completedMatches = completedMatches[teamKey] ?: 0,
+                    leftMatches = leftMatches[teamKey] ?: 0,
+                    eloRating = round(value).toInt(),
+                    avgPlace = (sumPlace[teamKey] ?: 0.0) / count,
+                    avgScore = if (scores > 0) (sumScore[teamKey] ?: 0.0) / scores else null,
+                    bestScore = bestScore[teamKey],
+                    lastMatchAtMs = lastMatchAt[teamKey] ?: 0L,
                 )
-            }
-
-            // sorting requirements
-            rows.sortWith(
+            }.sortedWith(
                 compareByDescending<QualifierTeamRow> { it.eloRating }
                     .thenBy { it.avgPlace }
-                    .thenByDescending { it.avgPaint }
-                    .thenByDescending { it.bestPaint }
+                    .thenByDescending { it.avgScore ?: Double.NEGATIVE_INFINITY }
+                    .thenByDescending { it.bestScore ?: Double.NEGATIVE_INFINITY }
                     .thenBy { it.teamKey }
             )
 
-            return QualifierSnapshot(
-                eventId = eventId,
-                stage = stage,
-                generatedAtMs = generatedAtMs,
-                consideredUntilMs = consideredUntilMs,
-                matchesConsidered = matchesConsidered,
-                matchesSkipped = matchesSkipped,
-                rows = rows,
-            )
+            return QualifierSnapshot(eventId, stage, generatedAtMs, consideredUntilMs, matchesConsidered, matchesSkipped, rows)
         }
 
-        private data class MatchTeamInput(
+        private data class RatingEntry(
             val teamKey: String,
-            val paintPercent: Double,
-            val place: Int = -1,
+            val place: Int,
+            val score: Double?,
+            val completionStatus: CompletionStatus,
         )
 
         private fun metricText(metrics: List<Metric>, key: String): String? {
@@ -713,18 +662,6 @@ object TournamentQualifierManager {
             return null
         }
 
-        private fun metricDouble(metrics: List<Metric>, key: String): Double? {
-            if (metrics.isEmpty()) return null
-            for (m in metrics) {
-                if (m.key == key) {
-                    val r = m.valueReal
-                    if (r != null) return r
-                    val i = m.valueInt
-                    if (i != null) return i.toDouble()
-                }
-            }
-            return null
-        }
     }
 
     private fun updateYamlAndReload(mutator: (YamlConfiguration) -> Boolean): Boolean {
@@ -747,18 +684,20 @@ object TournamentQualifierManager {
 
     private fun writeRatingCsv(file: File, snapshot: QualifierSnapshot, minMatches: Int) {
         file.bufferedWriter().use { out ->
-            out.appendLine("rank,team_key,elo,matches,avg_place,avg_paint,best_paint,last_match_at_ms,qualified")
+            out.appendLine("rank,team_key,elo,matches,completed_matches,left_matches,avg_place,avg_score,best_score,last_match_at_ms,qualified")
             for ((idx, row) in snapshot.rows.withIndex()) {
-                val qualified = row.matchesCount >= minMatches
+                val qualified = row.completedMatches >= minMatches
                 out.appendLine(
                     listOf(
                         (idx + 1).toString(),
                         row.teamKey,
                         row.eloRating.toString(),
                         row.matchesCount.toString(),
+                        row.completedMatches.toString(),
+                        row.leftMatches.toString(),
                         formatDouble(row.avgPlace),
-                        formatDouble(row.avgPaint),
-                        formatDouble(row.bestPaint),
+                        formatNullable(row.avgScore),
+                        formatNullable(row.bestScore),
                         row.lastMatchAtMs.toString(),
                         qualified.toString(),
                     ).joinToString(",")
@@ -785,10 +724,12 @@ object TournamentQualifierManager {
                     "elo" to row.eloRating,
                     "matches" to row.matchesCount,
                     "avg_place" to row.avgPlace,
-                    "avg_paint" to row.avgPaint,
-                    "best_paint" to row.bestPaint,
+                    "completed_matches" to row.completedMatches,
+                    "left_matches" to row.leftMatches,
+                    "avg_score" to (row.avgScore ?: ""),
+                    "best_score" to (row.bestScore ?: ""),
                     "last_match_at" to row.lastMatchAtMs,
-                    "qualified" to (row.matchesCount >= minMatches),
+                    "qualified" to (row.completedMatches >= minMatches),
                 )
             )
         }
@@ -799,7 +740,7 @@ object TournamentQualifierManager {
 
     private fun writeAuditCsv(file: File, audit: List<QualifierMatchAudit>) {
         file.bufferedWriter().use { out ->
-            out.appendLine("match_id,ended_at_ms,skipped,skipped_reason,team_key,place,paint_percent,rating_before,delta,rating_after")
+            out.appendLine("match_id,ended_at_ms,skipped,skipped_reason,team_key,place,score,completion_status,rating_before,delta,rating_after")
             for (m in audit) {
                 if (m.skipped) {
                     out.appendLine(
@@ -808,6 +749,7 @@ object TournamentQualifierManager {
                             m.endedAtMs.toString(),
                             "true",
                             (m.skippedReason ?: "").replace(',', ' '),
+                            "",
                             "",
                             "",
                             "",
@@ -828,7 +770,8 @@ object TournamentQualifierManager {
                             "",
                             t.teamKey,
                             t.place.toString(),
-                            formatDouble(t.paintPercent),
+                            formatNullable(t.score),
+                            t.completionStatus,
                             formatDouble(t.ratingBefore),
                             formatDouble(t.delta),
                             formatDouble(t.ratingAfter),
@@ -854,7 +797,8 @@ object TournamentQualifierManager {
                     linkedMapOf(
                         "team_key" to t.teamKey,
                         "place" to t.place,
-                        "paint_percent" to t.paintPercent,
+                        "score" to (t.score ?: ""),
+                        "completion_status" to t.completionStatus,
                         "rating_before" to t.ratingBefore,
                         "delta" to t.delta,
                         "rating_after" to t.ratingAfter,
@@ -879,6 +823,8 @@ object TournamentQualifierManager {
     private fun formatDouble(v: Double): String {
         return String.format(Locale.US, "%.2f", v)
     }
+
+    private fun formatNullable(v: Double?): String = v?.let(::formatDouble) ?: ""
 
     private fun loadDefaultYaml(): YamlConfiguration {
         val stream = plugin.javaClass.classLoader.getResourceAsStream("minigamesapi/tournament_qualifier.yml")
@@ -919,11 +865,6 @@ elo:
     k_provisional: 24
     k_stable: 16
   scale: 400
-
-data:
-  paint_percent_key: "paint_percent"
-  allow_fallback_to_score: false
-  paint_percent_format: "0_100" # 0_100 | 0_1
 
 locking:
   mode: "timestamp"   # timestamp | match_id

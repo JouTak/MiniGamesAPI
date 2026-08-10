@@ -114,7 +114,7 @@ object TournamentAdvanceManager {
         val snapshot = TournamentQualifierManager.getSnapshot()
             ?: return AdvanceResult(false, "No qualifier snapshot. Run /tournament qualifier recalc")
 
-        val eligible = snapshot.rows.filter { it.matchesCount >= cfg.minMatches }
+        val eligible = snapshot.rows.filter { it.completedMatches >= cfg.minMatches }
         val t = eligible.size
 
         val chosen = cfg.defaultAdvanceThresholds
@@ -141,7 +141,7 @@ object TournamentAdvanceManager {
         val snapshot = TournamentQualifierManager.getSnapshot()
             ?: return AdvanceResult(false, "No qualifier snapshot. Run /tournament qualifier recalc")
 
-        val eligible = snapshot.rows.filter { it.matchesCount >= cfg.minMatches }
+        val eligible = snapshot.rows.filter { it.completedMatches >= cfg.minMatches }
         if (eligible.isEmpty()) {
             return AdvanceResult(false, "No eligible teams (need min_matches=${cfg.minMatches})")
         }

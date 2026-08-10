@@ -837,8 +837,8 @@ messages:
     moved_to_ceremony: "&7Вы больше не можете участвовать в этом этапе. Переносим на торжественную карту..."
     moved_to_ceremony_kick_later: "&7Вы больше не можете участвовать в этом этапе. Через &f{seconds}&7 сек вы будете отключены."
     post_match_kick: "&7Матч завершён. Для следующей попытки зайдите на сервер снова."
-    # Elo-режим: обновление рейтинга после матча (placeholders: {team_key}, {rating}, {delta}, {place}, {paint_percent})
-    elo_rating_update: "&bELO&7: &f{team_key}&7 = &a{rating}&7 (&e{delta}&7) &8| &7место: &f{place}&7, краска: &f{paint_percent}&7%"
+    # Elo-режим: обновление рейтинга после матча (placeholders: {team_key}, {rating}, {delta}, {place}, {score})
+    elo_rating_update: "&bELO&7: &f{team_key}&7 = &a{rating}&7 (&e{delta}&7) &8| &7место: &f{place}&7, результат: &f{score}"
     elo_rating_update_skipped: "&cELO не учтён: &7{reason}"
     error: "&cОшибка проверки доступа. Обратитесь к администратору."
 
@@ -909,11 +909,6 @@ elo:
     k_provisional: 24
     k_stable: 16
   scale: 400
-
-data:
-  paint_percent_key: "paint_percent"
-  allow_fallback_to_score: false
-  paint_percent_format: "0_100" # 0_100 | 0_1
 
 locking:
   mode: "timestamp"   # timestamp | match_id
