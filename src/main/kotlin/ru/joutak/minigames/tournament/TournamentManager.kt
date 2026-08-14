@@ -270,7 +270,13 @@ object TournamentManager {
      *
      * This method is async-safe and does not touch Bukkit API.
      */
-    fun applyMatchResult(result: MatchResult): CompletableFuture<Boolean> {
+    fun applyMatchResult(result: MatchResult): CompletableFuture<Boolean> =
+        applyMatchResult(result, emptyMap())
+
+    fun applyMatchResult(
+        result: MatchResult,
+        explicitTeamKeysByTeamId: Map<Int, String>,
+    ): CompletableFuture<Boolean> {
         if (!enabled) return CompletableFuture.completedFuture(false)
         if (!initOk) return CompletableFuture.completedFuture(false)
         val s = storage ?: return CompletableFuture.completedFuture(false)
@@ -285,7 +291,31 @@ object TournamentManager {
             try {
                 val teamKeyByTeamId = HashMap<Int, String>()
 
-                // Map teamId -> teamKey using any player in that team.
+                // Persisted team_key metrics are authoritative. The explicit map is the source used by
+                // callers that already know the tournament identity (for example solo player:<uuid> keys).
+                for (team in result.teams) {
+                    val metricTeamKey = team.metrics
+                        .firstOrNull { it.key == "team_key" }
+                        ?.valueText
+                        ?.trim()
+                        .orEmpty()
+                    if (metricTeamKey.isNotBlank()) {
+                        teamKeyByTeamId[team.teamId] = metricTeamKey
+                    }
+                }
+
+                val resultTeamIds = result.teams.mapTo(HashSet()) { it.teamId }
+                result.players.mapNotNullTo(resultTeamIds) { it.teamId }
+                for ((teamId, rawTeamKey) in explicitTeamKeysByTeamId) {
+                    if (teamId !in resultTeamIds) continue
+                    if (teamKeyByTeamId.containsKey(teamId)) continue
+                    val teamKey = rawTeamKey.trim()
+                    if (teamKey.isNotBlank()) {
+                        teamKeyByTeamId[teamId] = teamKey
+                    }
+                }
+
+                // Fall back to resolving teamId -> teamKey through any player in that team.
                 for (p in result.players) {
                     val teamId = p.teamId ?: continue
                     if (teamKeyByTeamId.containsKey(teamId)) continue

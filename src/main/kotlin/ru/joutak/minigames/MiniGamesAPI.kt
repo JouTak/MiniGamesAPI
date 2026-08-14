@@ -45,7 +45,13 @@ object MiniGamesAPI {
      */
     fun isResultsEnabled(): Boolean = ResultsManager.isEnabled()
 
-    fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> {
+    fun recordMatchResult(result: MatchResult): CompletableFuture<Boolean> =
+        recordMatchResultInternal(result, emptyMap())
+
+    private fun recordMatchResultInternal(
+        result: MatchResult,
+        teamKeysByTeamId: Map<Int, String>,
+    ): CompletableFuture<Boolean> {
         runOnMainThread { Bukkit.getPluginManager().callEvent(MatchResultRecordingEvent(result)) }
 
         val resultsFuture = ResultsManager.recordMatch(result)
@@ -55,9 +61,9 @@ object MiniGamesAPI {
         // or when recording failed.
         val tournamentFuture = if (ResultsManager.isEnabled()) {
             resultsFuture.handle { _, _ -> null }
-                .thenCompose { TournamentManager.applyMatchResult(result) }
+                .thenCompose { TournamentManager.applyMatchResult(result, teamKeysByTeamId) }
         } else {
-            TournamentManager.applyMatchResult(result)
+            TournamentManager.applyMatchResult(result, teamKeysByTeamId)
         }
 
         if (TournamentManager.isEnabled() && TournamentManager.isPostMatchKickParticipantsEnabled()) {
@@ -92,7 +98,7 @@ object MiniGamesAPI {
                 }
             }
         )
-        return recordMatchResult(enriched)
+        return recordMatchResultInternal(enriched, teamKeysByTeamId)
     }
 
     fun isTournamentEnabled(): Boolean = TournamentManager.isEnabled()

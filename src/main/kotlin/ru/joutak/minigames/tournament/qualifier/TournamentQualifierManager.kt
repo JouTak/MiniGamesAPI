@@ -76,6 +76,9 @@ object TournamentQualifierManager {
     @Volatile
     private var recalcInFlight: Boolean = false
 
+    private val recalcLock = Any()
+    private var pendingRecalcFuture: CompletableFuture<QualifierSnapshot?>? = null
+
     @Volatile
     private var executor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "tournament-qualifier").apply { isDaemon = true }
@@ -170,11 +173,20 @@ object TournamentQualifierManager {
      */
     fun recalcAsync(): CompletableFuture<QualifierSnapshot?> {
         if (!initialized) return CompletableFuture.completedFuture(null)
-        if (recalcInFlight) return CompletableFuture.completedFuture(lastSnapshot)
 
-        recalcInFlight = true
+        synchronized(recalcLock) {
+            if (recalcInFlight) {
+                pendingRecalcFuture?.let { return it }
+                return CompletableFuture<QualifierSnapshot?>().also { pendingRecalcFuture = it }
+            }
+            recalcInFlight = true
+        }
 
-        return CompletableFuture.supplyAsync({
+        return scheduleRecalc()
+    }
+
+    private fun scheduleRecalc(): CompletableFuture<QualifierSnapshot?> {
+        val current = CompletableFuture.supplyAsync({
             try {
                 val cfg = config
                 val ctx = resolveEffectiveContext(cfg)
@@ -241,10 +253,26 @@ object TournamentQualifierManager {
                 plugin.logger.severe("Qualifier recalc failed: ${t.message}")
                 plugin.logger.fine(t.stackTraceToString())
                 null
-            } finally {
-                recalcInFlight = false
             }
         }, executor)
+
+        current.whenComplete { _, _ ->
+            val pending = synchronized(recalcLock) {
+                pendingRecalcFuture.also {
+                    pendingRecalcFuture = null
+                    if (it == null) recalcInFlight = false
+                }
+            }
+
+            if (pending != null) {
+                scheduleRecalc().whenComplete { snapshot, error ->
+                    if (error != null) pending.completeExceptionally(error)
+                    else pending.complete(snapshot)
+                }
+            }
+        }
+
+        return current
     }
 
     private fun buildTeamEloUiCache(snapshot: QualifierSnapshot, audit: List<QualifierMatchAudit>): Map<String, TeamEloInfo> {
