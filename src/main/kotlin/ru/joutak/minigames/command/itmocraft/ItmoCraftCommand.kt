@@ -486,7 +486,7 @@ object ItmoCraftCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStac
         val rows = if (includeIncomplete) {
             snapshot.rows
         } else {
-            snapshot.rows.filter { it.matchesCount >= cfg.minMatches }
+            snapshot.rows.filter { it.completedMatches >= cfg.minMatches }
         }
 
         if (rows.isEmpty()) {

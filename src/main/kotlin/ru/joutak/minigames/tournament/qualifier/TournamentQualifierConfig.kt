@@ -11,14 +11,6 @@ data class TournamentQualifierConfig(
     val eloKProvisional: Int,
     val eloKStable: Int,
     val eloScale: Int,
-    val paintPercentKey: String,
-    val allowFallbackToScore: Boolean,
-    /**
-     * Allows qualifier recalc to consider matches with a single team (e.g. admin test runs).
-     * Elo delta for such matches will be 0.0 (no opponents), but stats/match count will be recorded.
-     */
-    val allowSingleTeamMatches: Boolean,
-    val paintPercentFormat: PaintPercentFormat,
     val lockingMode: LockingMode,
     val locked: Boolean,
     val lockedAt: Long,
@@ -27,22 +19,6 @@ data class TournamentQualifierConfig(
     /** Next tournament stage that should be restricted by advanced_teams.yml. */
     val advanceToStage: String,
 ) {
-
-    enum class PaintPercentFormat {
-        ZERO_TO_100,
-        ZERO_TO_1,
-        ;
-
-        companion object {
-            fun fromConfig(raw: String?): PaintPercentFormat {
-                return when (raw?.trim()?.lowercase()) {
-                    "0_1" -> ZERO_TO_1
-                    "0_100" -> ZERO_TO_100
-                    else -> ZERO_TO_100
-                }
-            }
-        }
-    }
 
     enum class LockingMode {
         TIMESTAMP,
@@ -75,10 +51,6 @@ data class TournamentQualifierConfig(
             eloKProvisional = 24,
             eloKStable = 16,
             eloScale = 400,
-            paintPercentKey = "paint_percent",
-            allowFallbackToScore = false,
-            allowSingleTeamMatches = false,
-            paintPercentFormat = PaintPercentFormat.ZERO_TO_100,
             lockingMode = LockingMode.TIMESTAMP,
             locked = false,
             lockedAt = 0L,
@@ -103,11 +75,6 @@ data class TournamentQualifierConfig(
             val kProv = yaml.getInt("elo.k_placement.k_provisional", DEFAULT.eloKProvisional)
             val kStable = yaml.getInt("elo.k_placement.k_stable", DEFAULT.eloKStable)
             val scale = yaml.getInt("elo.scale", DEFAULT.eloScale).coerceAtLeast(1)
-
-            val paintKey = yaml.getString("data.paint_percent_key")?.trim().orEmpty()
-            val allowFallback = yaml.getBoolean("data.allow_fallback_to_score", DEFAULT.allowFallbackToScore)
-            val allowSingleTeam = yaml.getBoolean("data.allow_single_team_matches", DEFAULT.allowSingleTeamMatches)
-            val paintFmt = PaintPercentFormat.fromConfig(yaml.getString("data.paint_percent_format"))
 
             val lockMode = LockingMode.fromConfig(yaml.getString("locking.mode"))
             val locked = yaml.getBoolean("locking.locked", DEFAULT.locked)
@@ -135,10 +102,6 @@ data class TournamentQualifierConfig(
                 eloKProvisional = kProv,
                 eloKStable = kStable,
                 eloScale = scale,
-                paintPercentKey = if (paintKey.isNotBlank()) paintKey else DEFAULT.paintPercentKey,
-                allowFallbackToScore = allowFallback,
-                allowSingleTeamMatches = allowSingleTeam,
-                paintPercentFormat = paintFmt,
                 lockingMode = lockMode,
                 locked = locked,
                 lockedAt = lockedAt,

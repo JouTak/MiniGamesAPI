@@ -1,7 +1,7 @@
 event_id: "spartakiad_2026"
 stage: "qualifier_splatoon"
 
-# Команда попадает в таблицу отбора, только если сыграла минимум M матчей.
+# Участник попадает в таблицу отбора, только если завершил минимум M матчей.
 min_matches: 3
 
 elo:
@@ -12,18 +12,6 @@ elo:
     k_provisional: 24
     k_stable: 16
   scale: 400
-
-data:
-  # Ключ числового поля в TeamResult.metadata, где режим пишет paint_percent.
-  paint_percent_key: "paint_percent"
-  # Если paint_percent не найден — можно (опционально) использовать team.score.
-  allow_fallback_to_score: false
-  # Для админских тестов: разрешить учитывать матчи с 1 командой.
-  # В таких матчах Elo-дельта будет 0.0 (нет оппонентов), но запись попадёт в audit,
-  # а команда появится в /tournament rating ... includeIncomplete.
-  allow_single_team_matches: false
-  # Формат paint_percent: "0_100" (0..100) или "0_1" (0..1)
-  paint_percent_format: "0_100"
 
 locking:
   # timestamp | match_id
