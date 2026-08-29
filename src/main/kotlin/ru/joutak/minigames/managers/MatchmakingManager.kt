@@ -28,6 +28,9 @@ object MatchmakingManager {
     private val activeInstances = mutableListOf<GameInstance>()
     private val readyQueue = ArrayDeque<GameInstance>()
 
+    /** Players who explicitly joined the current open SOLO Elo queue via /ready or the lobby item. */
+    private val openSoloReadyPlayers = mutableSetOf<UUID>()
+
     /**
      * Instances explicitly forced to start by admin command.
      * Such instances should stay in the ready queue even if normal readiness rules would remove them.
@@ -74,6 +77,7 @@ object MatchmakingManager {
         activeInstances.clear()
         readyQueue.clear()
         forcedReadyInstances.clear()
+        openSoloReadyPlayers.clear()
 
         val globalPoolSize = MiniGamesCore.configuration.get(ConfigKeys.MATCHMAKING_INSTANCE_POOL_SIZE)
             .coerceAtLeast(1)
@@ -145,6 +149,12 @@ object MatchmakingManager {
         return activeInstances.any { it.hasWaitingPlayer(uuid) || (it.started && it.hasActivePlayer(uuid)) }
     }
 
+    fun markOpenSoloTournamentReady(uuid: UUID): Boolean = openSoloReadyPlayers.add(uuid)
+
+    fun isOpenSoloTournamentReady(uuid: UUID): Boolean = openSoloReadyPlayers.contains(uuid)
+
+    fun clearOpenSoloTournamentReady(uuid: UUID): Boolean = openSoloReadyPlayers.remove(uuid)
+
     fun addPlayer(player: Player) {
         val instance = pickWaitingInstanceForJoin() ?: return
         if (instance.addPlayer(player)) {
@@ -189,6 +199,7 @@ object MatchmakingManager {
         val uuid = player.uniqueId
         var removedFromInstance = false
         var removedFromActiveMatch = false
+        val removedFromOpenSoloReady = clearOpenSoloTournamentReady(uuid)
 
         for (instance in activeInstances) {
             // If player is in a started match, remove from active participants.
@@ -220,12 +231,12 @@ object MatchmakingManager {
         val removedFromQueue = GameQueue.removePlayer(player)
         QueueBossBarManager.remove(player)
 
-        if (removedFromInstance || removedFromQueue) {
+        if (removedFromInstance || removedFromQueue || removedFromOpenSoloReady) {
             QueueBossBarManager.updateAll()
             LobbyScoreboardManager.updateAll()
         }
 
-        if (removedFromInstance && MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+        if ((removedFromInstance || removedFromOpenSoloReady) && MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
             Bukkit.getScheduler().runTask(MiniGamesCore.plugin, Runnable {
                 rebuildTournamentWaitingAssignments()
             })
@@ -240,7 +251,7 @@ object MatchmakingManager {
             }, 1L)
         }
 
-        return removedFromInstance || removedFromQueue
+        return removedFromInstance || removedFromQueue || removedFromOpenSoloReady
     }
 
     fun checkReady(instance: GameInstance) {
@@ -305,6 +316,7 @@ object MatchmakingManager {
         clearDelayedState(instance)
 
         val activeIds = instance.startMatchAndSnapshotPlayers()
+        openSoloReadyPlayers.removeAll(activeIds)
 
         // Remove queue BossBars and lobby items from all match participants.
         activeIds.mapNotNull { Bukkit.getPlayer(it) }
@@ -383,8 +395,10 @@ object MatchmakingManager {
         )
 
         // Group online lobby players by tournament team key, excluding running matches.
+        val openSoloElo = TournamentManager.isOpenSoloEloMode()
         val lobbyPlayers = Bukkit.getOnlinePlayers()
             .filter { it.isOnline && !isPlayerInStartedGame(it.uniqueId) && !lockedPlayerIds.contains(it.uniqueId) }
+            .filter { !openSoloElo || isOpenSoloTournamentReady(it.uniqueId) }
 
         val byTeam = linkedMapOf<String, MutableList<Player>>()
         for (p in lobbyPlayers) {

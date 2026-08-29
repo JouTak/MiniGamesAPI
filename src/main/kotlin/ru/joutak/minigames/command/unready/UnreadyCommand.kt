@@ -26,6 +26,13 @@ object UnreadyCommand {
             }
 
             if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+                if (TournamentManager.isOpenSoloEloMode()) {
+                    val removed = MatchmakingManager.removePlayer(player)
+                    val key = if (removed) "messages.unready.removed" else "messages.unready.not_in_queue"
+                    player.sendMessage(Messages.prefixedComponent(key))
+                    return@executes 1
+                }
+
                 val res = TournamentManager.clearForceReady(player.uniqueId, player.name)
                 if (!res.allowed) {
                     val key = when (res.reason) {

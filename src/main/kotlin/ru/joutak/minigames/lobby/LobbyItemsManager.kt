@@ -16,6 +16,7 @@ import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
 import ru.joutak.minigames.config.Messages
 import ru.joutak.minigames.managers.MatchmakingManager
+import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.ui.QueueBossBarManager
 
 object LobbyItemsManager {
@@ -122,14 +123,16 @@ object LobbyItemsManager {
         val inv = player.inventory
 
         val tournament = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
+        val openSoloElo = tournament && TournamentManager.isOpenSoloEloMode()
         val teamSelectionAvailable = MatchmakingManager.isTeamSelectionAvailable()
 
         for (def in hotbarItems) {
             if (!def.enabled) continue
             if (def.slot !in 0..8) continue
 
-            // In tournament mode, players should not use manual ready / team selection.
-            if (tournament && (def.action == LobbyAction.Ready || def.action == LobbyAction.TeamSelect)) continue
+            // Open SOLO Elo uses explicit /ready; standard tournaments keep automatic team assignment.
+            if (tournament && def.action == LobbyAction.Ready && !openSoloElo) continue
+            if (tournament && def.action == LobbyAction.TeamSelect) continue
 
             // In solo mode, team selection is intentionally hidden: /ready joins the solo queue directly.
             if (!teamSelectionAvailable && def.action == LobbyAction.TeamSelect) continue
