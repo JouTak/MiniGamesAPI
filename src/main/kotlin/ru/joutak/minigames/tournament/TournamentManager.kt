@@ -86,6 +86,9 @@ object TournamentManager {
     // Online participant count per team_key.
     private val onlineCountByTeamKey = ConcurrentHashMap<String, Int>()
 
+    // Best-effort display names for open SOLO participants. Identity itself remains UUID-based.
+    private val openSoloDisplayNameByTeamKey = ConcurrentHashMap<String, String>()
+
     data class TeamUiInfo(
         val teamKey: String,
         val displayName: String?,
@@ -134,6 +137,44 @@ object TournamentManager {
         return getTournamentProgressMode() == TournamentProgressMode.ELO
     }
 
+    fun isOpenSoloEloMode(): Boolean {
+        if (!isEloTournamentMode()) return false
+        if (!configuration.get(ConfigKeys.TOURNAMENT_ELO_OPEN_REGISTRATION)) return false
+        return configuration.get(ConfigKeys.MATCHMAKING_MODE).trim().equals("SOLO", ignoreCase = true)
+    }
+
+    fun getParticipantDisplayName(teamKey: String): String? {
+        openSoloDisplayNameByTeamKey[teamKey]?.let { return it }
+        getCachedTeamDisplayName(teamKey)?.let { return it }
+
+        val uuid = teamKey
+            .takeIf { it.startsWith("player:") }
+            ?.removePrefix("player:")
+            ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?: return null
+
+        return Bukkit.getOfflinePlayer(uuid).name
+    }
+
+    private fun openSoloTeamKey(uuid: UUID, name: String): String {
+        val teamKey = "player:${uuid.toString().lowercase()}"
+        val displayName = name.trim()
+        if (displayName.isNotEmpty()) {
+            openSoloDisplayNameByTeamKey[teamKey] = displayName
+        }
+        return teamKey
+    }
+
+    private fun resolveParticipantTeamKey(
+        storage: TournamentStorage,
+        eventId: String,
+        uuid: UUID,
+        name: String,
+    ): String? {
+        if (isOpenSoloEloMode()) return openSoloTeamKey(uuid, name)
+        return storage.findTeamKey(eventId, uuid, name)
+    }
+
 
     fun isPostMatchKickParticipantsEnabled(): Boolean {
         if (!enabled) return false
@@ -174,6 +215,7 @@ object TournamentManager {
             preLoginTeamKeyCache.clear()
             onlineTeamKeyByPlayer.clear()
             onlineCountByTeamKey.clear()
+            openSoloDisplayNameByTeamKey.clear()
             teamUiCache.clear()
             pendingSlotsByPlayer.clear()
             pendingCountByTeamKey.clear()
@@ -184,6 +226,7 @@ object TournamentManager {
         preLoginTeamKeyCache.clear()
         onlineTeamKeyByPlayer.clear()
         onlineCountByTeamKey.clear()
+        openSoloDisplayNameByTeamKey.clear()
         teamUiCache.clear()
         pendingSlotsByPlayer.clear()
         pendingCountByTeamKey.clear()
@@ -248,6 +291,7 @@ object TournamentManager {
         preLoginTeamKeyCache.clear()
         onlineTeamKeyByPlayer.clear()
         onlineCountByTeamKey.clear()
+        openSoloDisplayNameByTeamKey.clear()
         teamUiCache.clear()
         pendingSlotsByPlayer.clear()
         pendingCountByTeamKey.clear()
@@ -563,7 +607,7 @@ object TournamentManager {
         if (eventId.isBlank()) return null
 
         return try {
-            s.findTeamKey(eventId, uuid, name)?.also { key ->
+            resolveParticipantTeamKey(s, eventId, uuid, name)?.also { key ->
                 if (key.isNotBlank()) {
                     onlineTeamKeyByPlayer[uuid] = key
                 }
@@ -887,7 +931,7 @@ object TournamentManager {
                 }
 
                 val tk = try {
-                    s.findTeamKey(eventId, uuid, name)
+                    resolveParticipantTeamKey(s, eventId, uuid, name)
                 } catch (_: Throwable) {
                     null
                 }
@@ -977,7 +1021,7 @@ object TournamentManager {
         val defaultAttempts = configuration.get(ConfigKeys.TOURNAMENT_DEFAULT_ATTEMPTS)
 
         try {
-            val teamKey = s.findTeamKey(eventId, uuid, name)
+            val teamKey = resolveParticipantTeamKey(s, eventId, uuid, name)
                 ?: return TournamentGateResult(false, denyReason = TournamentDenyReason.NOT_PARTICIPANT)
 
             if (prevStage.isNotBlank()) {

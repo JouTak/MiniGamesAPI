@@ -15,6 +15,7 @@ import ru.joutak.minigames.lobby.LobbyItemsManager
 import ru.joutak.minigames.ui.QueueBossBarManager
 import ru.joutak.minigames.ui.LobbyScoreboardManager
 import ru.joutak.minigames.tournament.TournamentManager
+import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import ru.joutak.minigames.tournament.seeding.TournamentSeedingManager
 import ru.joutak.minigames.tournament.plan.TournamentMatchPlanManager
 import java.util.ArrayDeque
@@ -273,7 +274,7 @@ object MatchmakingManager {
             if (!readyQueue.contains(instance)) {
                 // Announce "not full but will start" loudly in chat (like CreakyWars), if applicable.
                 // Tournament has its own readiness logic and does not use the generic partial-start announcer.
-                if (!MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+                if (!MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED) || TournamentManager.isOpenSoloEloMode()) {
                     maybeAnnounceReady(instance)
                 }
 
@@ -334,6 +335,20 @@ object MatchmakingManager {
 
         val waitingInstances = activeInstances.filter { !it.started }
         if (waitingInstances.isEmpty()) return
+
+        // A locked open qualifier keeps its current rating and stops creating new matches.
+        // Running matches are left untouched and must finish before the organizer locks the event.
+        if (TournamentManager.isOpenSoloEloMode() && TournamentQualifierManager.isLocked()) {
+            for (instance in waitingInstances) {
+                readyQueue.remove(instance)
+                forcedReadyInstances.remove(instance)
+                clearDelayedState(instance)
+                instance.resetTournamentLobbyState()
+            }
+            QueueBossBarManager.updateAll()
+            LobbyScoreboardManager.updateAll()
+            return
+        }
 
         // Do not reshuffle instances that are already in ready queue (they are about to be started).
         val lockedInstances = HashSet<GameInstance>()
@@ -596,7 +611,7 @@ object MatchmakingManager {
     }
 
     private fun shouldBeReady(instance: GameInstance): Boolean {
-        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+        if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED) && !TournamentManager.isOpenSoloEloMode()) {
             clearDelayedState(instance)
             return isTournamentReady(instance)
         }

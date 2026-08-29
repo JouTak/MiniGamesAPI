@@ -104,10 +104,12 @@ object PlayerJoinListener : Listener {
             // Help message
             when {
                 MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED) -> {
-                    val key = if (TournamentManager.isEloTournamentMode() && Messages.has("messages.join.help_tournament_elo")) {
-                        "messages.join.help_tournament_elo"
-                    } else {
-                        "messages.join.help_tournament"
+                    val key = when {
+                        TournamentManager.isOpenSoloEloMode() && Messages.has("messages.join.help_tournament_elo_open") ->
+                            "messages.join.help_tournament_elo_open"
+                        TournamentManager.isEloTournamentMode() && Messages.has("messages.join.help_tournament_elo") ->
+                            "messages.join.help_tournament_elo"
+                        else -> "messages.join.help_tournament"
                     }
 
                     player.sendMessage(Messages.prefixedComponent(key))
