@@ -107,6 +107,8 @@ ui:
       empty: "&7Нет набора игроков"
       tournament:
         header: "&6Турнир"
+        solo_player: "&7Игрок: &b{team_name}"
+        solo_status: "&7Elo: &d{elo}&7{elo_suffix}"
         team: "&7Команда: &b{team_name}"
         status: "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts}"
         forceready: "&7Forceready: {forceready_status}"

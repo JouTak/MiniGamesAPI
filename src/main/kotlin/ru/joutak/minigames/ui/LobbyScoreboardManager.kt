@@ -163,6 +163,7 @@ object LobbyScoreboardManager {
         )
 
         val tournamentEnabled = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)
+        val openSoloElo = tournamentEnabled && TournamentManager.isOpenSoloEloMode()
         val myTeamKey = if (tournamentEnabled) TournamentManager.getCachedTeamKey(player.uniqueId) else null
 
         if (tournamentEnabled && myTeamKey != null) {
@@ -171,7 +172,9 @@ object LobbyScoreboardManager {
             val info = TournamentManager.getTeamUiInfo(myTeamKey)
 
             val maxOnline = MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_MAX_ONLINE_PER_TEAM)
-            val teamName = info.displayName?.takeIf { it.isNotBlank() } ?: myTeamKey
+            val teamName = info.displayName?.takeIf { it.isNotBlank() }
+                ?: TournamentManager.getParticipantDisplayName(myTeamKey)
+                ?: myTeamKey
             val frStatus = if (info.forceReady) {
                 Messages.getString("ui.lobby.scoreboard.tournament.forceready_on") ?: "&aON"
             } else {
@@ -205,21 +208,34 @@ object LobbyScoreboardManager {
                 fallback = "&6Турнир",
                 placeholders = tp
             )
-            lines += formatLine(
-                key = "ui.lobby.scoreboard.tournament.team",
-                fallback = "&7Команда: &b{team_name}",
-                placeholders = tp
-            )
-            lines += formatLine(
-                key = "ui.lobby.scoreboard.tournament.status",
-                fallback = "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts} &8| &7Elo: &d{elo}&7{elo_suffix}",
-                placeholders = tp
-            )
-            lines += formatLine(
-                key = "ui.lobby.scoreboard.tournament.forceready",
-                fallback = "&7Forceready: {forceready_status}",
-                placeholders = tp
-            )
+            if (openSoloElo) {
+                lines += formatLine(
+                    key = "ui.lobby.scoreboard.tournament.solo_player",
+                    fallback = "&7Игрок: &b{team_name}",
+                    placeholders = tp
+                )
+                lines += formatLine(
+                    key = "ui.lobby.scoreboard.tournament.solo_status",
+                    fallback = "&7Elo: &d{elo}&7{elo_suffix}",
+                    placeholders = tp
+                )
+            } else {
+                lines += formatLine(
+                    key = "ui.lobby.scoreboard.tournament.team",
+                    fallback = "&7Команда: &b{team_name}",
+                    placeholders = tp
+                )
+                lines += formatLine(
+                    key = "ui.lobby.scoreboard.tournament.status",
+                    fallback = "&7Онлайн: &e{online}&7/&e{max} &8| &7Попытки: &e{attempts} &8| &7Elo: &d{elo}&7{elo_suffix}",
+                    placeholders = tp
+                )
+                lines += formatLine(
+                    key = "ui.lobby.scoreboard.tournament.forceready",
+                    fallback = "&7Forceready: {forceready_status}",
+                    placeholders = tp
+                )
+            }
         }
 
         lines += "&8 "
@@ -234,7 +250,7 @@ object LobbyScoreboardManager {
             return trimToSidebarLimit(lines)
         }
 
-        if (instance.config.isSoloMode) {
+        if (instance.config.isSoloMode || openSoloElo) {
             val waitingPlayers = instance.teams.flatten()
             val maxPlayers = instance.config.maxPlayers
 
