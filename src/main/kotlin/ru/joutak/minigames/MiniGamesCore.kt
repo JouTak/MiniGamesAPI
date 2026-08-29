@@ -809,6 +809,7 @@ messages:
     help_solo: "&7Одиночный режим: &a/ready&7 — встать в очередь, &c/unready&7 — выйти из очереди."
     help_tournament: "&7Турнир: команды назначаются организаторами. Команды: &e/forceready&7, &c/unready&7, &e/lobby"
     help_tournament_elo: "&7Квалификация (ELO): команды назначаются организаторами. Матчи собираются автоматически, попытки не ограничены (минимум 3). Команды: &e/forceready&7, &c/unready&7, &e/lobby"
+    help_tournament_elo_open: "&7Открытый Elo-турнир: вы автоматически добавлены в очередь. Текущие результаты: &e/tournament rating 30 includeIncomplete"
 
   feedback:
     label: "&bФорма обратной связи"

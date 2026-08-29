@@ -65,6 +65,13 @@ object ConfigKeys {
     val TOURNAMENT_ELO_ANNOUNCE_AFTER_MATCH = object : ConfigKey<Boolean>("tournament.elo.announce_after_match", true) {}
 
     /**
+     * Allows players to join an Elo SOLO tournament without a pre-created roster.
+     * Every player gets a stable tournament identity in the form player:<uuid>.
+     * Has no effect outside tournament.mode=elo + matchmaking.mode=SOLO.
+     */
+    val TOURNAMENT_ELO_OPEN_REGISTRATION = object : ConfigKey<Boolean>("tournament.elo.open_registration", false) {}
+
+    /**
      * If true, match participants are kicked after a recorded match in Elo tournament mode.
      * Default: false (qualifier usually runs continuously without reconnects).
      */

@@ -100,6 +100,8 @@ object TournamentQualifierManager {
 
     fun isInitialized(): Boolean = initialized
 
+    fun isLocked(): Boolean = initialized && config.locked
+
     fun getConfig(): TournamentQualifierConfig = config
 
     fun getLastError(): String? = lastError
@@ -336,7 +338,14 @@ object TournamentQualifierManager {
     /** Legacy-ish command helpers kept for TournamentCommand. */
     fun statusLines(): List<Component> = buildStatusLines()
 
-    fun getRatingLines(limit: Int, includeIncomplete: Boolean): List<Component> {
+    fun getRatingLines(limit: Int, includeIncomplete: Boolean): List<Component> =
+        getRatingLines(limit, includeIncomplete) { null }
+
+    fun getRatingLines(
+        limit: Int,
+        includeIncomplete: Boolean,
+        displayNameProvider: (String) -> String?,
+    ): List<Component> {
         val snap = lastSnapshot
             ?: return listOf(Component.text("No qualifier snapshot. Run /itmocraft qualifier recalc", NamedTextColor.RED))
 
@@ -354,10 +363,12 @@ object TournamentQualifierManager {
         for ((idx, row) in shown.withIndex()) {
             val need = (minMatches - row.completedMatches).coerceAtLeast(0)
             val suffix = if (need > 0) "  NOT QUALIFIED (need $need more)" else ""
+            val displayName = displayNameProvider(row.teamKey)?.trim().orEmpty()
+            val label = if (displayName.isNotEmpty()) displayName else row.teamKey
 
             out.add(
                 Component.text(
-                    "${idx + 1}. ${row.teamKey} | ${row.eloRating} | ${row.completedMatches}/${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatNullable(row.bestScore)}$suffix",
+                    "${idx + 1}. $label | ${row.eloRating} | ${row.completedMatches}/${row.matchesCount} | ${formatDouble(row.avgPlace)} | ${formatNullable(row.bestScore)}$suffix",
                     if (need > 0) NamedTextColor.DARK_GRAY else NamedTextColor.WHITE,
                 )
             )

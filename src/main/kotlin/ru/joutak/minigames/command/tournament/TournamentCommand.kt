@@ -24,12 +24,11 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
     override fun getBuilder(): LiteralArgumentBuilder<CommandSourceStack> {
         val plugin = MiniGamesCore.plugin
         return Commands.literal("tournament")
-            .requires { it.sender.hasPermission("minigames.tournament.admin") }
-            .then(buildQualifierNode())
+            .then(buildQualifierNode().requires { it.sender.hasPermission("minigames.tournament.admin") })
             .then(buildRatingNode())
-            .then(buildExportNode())
-            .then(buildRosterNode())
-            .then(buildAdvanceNode(plugin))
+            .then(buildExportNode().requires { it.sender.hasPermission("minigames.tournament.admin") })
+            .then(buildRosterNode().requires { it.sender.hasPermission("minigames.tournament.admin") })
+            .then(buildAdvanceNode(plugin).requires { it.sender.hasPermission("minigames.tournament.admin") })
     }
 
     private fun buildRosterNode(): LiteralArgumentBuilder<CommandSourceStack> {
@@ -100,6 +99,10 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
                 Commands.literal("lock")
                     .executes { ctx ->
                         val ok = TournamentQualifierManager.lock()
+                        if (ok) {
+                            ru.joutak.minigames.managers.MatchmakingManager.rebuildTournamentWaitingAssignments()
+                            TournamentQualifierManager.recalcAsync()
+                        }
                         send(
                             ctx.source.sender,
                             if (ok) Component.text("Qualifier locked", NamedTextColor.GREEN)
@@ -112,6 +115,9 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
                 Commands.literal("unlock")
                     .executes { ctx ->
                         val ok = TournamentQualifierManager.unlock()
+                        if (ok) {
+                            ru.joutak.minigames.managers.MatchmakingManager.rebuildTournamentWaitingAssignments()
+                        }
                         send(
                             ctx.source.sender,
                             if (ok) Component.text("Qualifier unlocked", NamedTextColor.GREEN)
@@ -138,7 +144,11 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
     private fun buildRatingNode(): LiteralArgumentBuilder<CommandSourceStack> {
         return Commands.literal("rating")
             .executes { ctx ->
-                val res = TournamentQualifierManager.getRatingLines(limit = 30, includeIncomplete = false)
+                val res = TournamentQualifierManager.getRatingLines(
+                    limit = 30,
+                    includeIncomplete = false,
+                    displayNameProvider = ru.joutak.minigames.tournament.TournamentManager::getParticipantDisplayName,
+                )
                 for (line in res) send(ctx.source.sender, line)
                 Command.SINGLE_SUCCESS
             }
@@ -146,7 +156,11 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
                 Commands.argument("limit", IntegerArgumentType.integer(1, 200))
                     .executes { ctx ->
                         val limit = IntegerArgumentType.getInteger(ctx, "limit")
-                        val res = TournamentQualifierManager.getRatingLines(limit = limit, includeIncomplete = false)
+                        val res = TournamentQualifierManager.getRatingLines(
+                            limit = limit,
+                            includeIncomplete = false,
+                            displayNameProvider = ru.joutak.minigames.tournament.TournamentManager::getParticipantDisplayName,
+                        )
                         for (line in res) send(ctx.source.sender, line)
                         Command.SINGLE_SUCCESS
                     }
@@ -154,7 +168,11 @@ object TournamentCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceSta
                         Commands.literal("includeIncomplete")
                             .executes { ctx ->
                                 val limit = IntegerArgumentType.getInteger(ctx, "limit")
-                                val res = TournamentQualifierManager.getRatingLines(limit = limit, includeIncomplete = true)
+                                val res = TournamentQualifierManager.getRatingLines(
+                                    limit = limit,
+                                    includeIncomplete = true,
+                                    displayNameProvider = ru.joutak.minigames.tournament.TournamentManager::getParticipantDisplayName,
+                                )
                                 for (line in res) send(ctx.source.sender, line)
                                 Command.SINGLE_SUCCESS
                             }
