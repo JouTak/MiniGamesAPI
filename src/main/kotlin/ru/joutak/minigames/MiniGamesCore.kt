@@ -170,6 +170,7 @@ object MiniGamesCore {
         migrateApiConfigV3(configPath)
         migrateApiConfigV4(configPath)
         migrateApiConfigV5(configPath)
+        migrateApiConfigV6(configPath)
 
         plugin.logger.info("MiniGamesAPI config path: $configPath (exists=${configPath.exists()})")
 
@@ -393,6 +394,35 @@ object MiniGamesCore {
             if (configChanged) cfg.save(configFile)
         } catch (t: Throwable) {
             plugin.logger.severe("Failed to migrate MiniGamesAPI config to v5: ${t.message}")
+        }
+    }
+
+    private fun migrateApiConfigV6(configPath: Path) {
+        try {
+            val configFile = configPath.toFile()
+            if (!configFile.exists()) return
+            val cfg = YamlConfiguration.loadConfiguration(configFile)
+
+            val version = cfg.getInt("minigamesapi.config_version", 1)
+            var configChanged = false
+
+            if (!cfg.contains("tournament.display_name")) {
+                cfg.set("tournament.display_name", "")
+                configChanged = true
+            }
+            if (!cfg.contains("tournament.elo.open_registration")) {
+                cfg.set("tournament.elo.open_registration", false)
+                configChanged = true
+            }
+
+            if (version < 6) {
+                cfg.set("minigamesapi.config_version", 6)
+                configChanged = true
+            }
+
+            if (configChanged) cfg.save(configFile)
+        } catch (t: Throwable) {
+            plugin.logger.severe("Failed to migrate MiniGamesAPI config to v6: ${t.message}")
         }
     }
 
@@ -684,7 +714,7 @@ object MiniGamesCore {
     private const val DEFAULT_API_CONFIG: String = """
 minigamesapi:
   # Service marker to distinguish API config from mode configs.
-  config_version: 5
+  config_version: 6
 
 mode:
   # Short logical key used for DB (mode_key) and internal identifiers.
@@ -703,11 +733,14 @@ storage:
 
 tournament:
   enabled: false
+  # Human-readable current tournament name for UI and PlaceholderAPI.
+  display_name: ""
   # standard: "до победного" (attempts/win); elo: бесконечный режим под Elo квалификацию
   mode: "standard"
   elo:
     min_attempts: 3
     auto_recalc: true
+    open_registration: false
     post_match:
       kick_participants: false
       kick_delay_ticks: 0

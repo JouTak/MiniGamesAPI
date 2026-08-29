@@ -1,6 +1,6 @@
 minigamesapi:
   # Служебный маркер, чтобы отличать конфиг API от конфига режима.
-  config_version: 5
+  config_version: 6
 
 mode:
   # Короткое логическое имя режима (используется как mode_key в results и для кросс-режимной логики).
@@ -24,6 +24,10 @@ tournament:
   # Режим турнира.
   enabled: false
 
+  # Человекочитаемое название текущего турнира для UI и PlaceholderAPI.
+  # Если пусто, используется event_id.
+  display_name: ""
+
   # Идентификатор турнира (общий для всех режимов/стадий).
   # Пример: "season3"
   event_id: "tournament"
@@ -45,6 +49,8 @@ tournament:
     auto_recalc: true
     # Писать участникам матча обновление Elo в чат (после auto_recalc).
     announce_after_match: true
+    # Разрешить SOLO-игрокам входить в турнир без заранее подготовленного roster.
+    open_registration: false
     post_match:
       # В Elo-квалификации обычно не нужно кикать игроков после каждого матча.
       kick_participants: false

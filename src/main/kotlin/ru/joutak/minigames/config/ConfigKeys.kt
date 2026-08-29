@@ -22,6 +22,9 @@ object ConfigKeys {
      */
     val TOURNAMENT_ENABLED = object : ConfigKey<Boolean>("tournament.enabled", false) {}
 
+    /** Human-readable current tournament name for lobby UI and placeholders. */
+    val TOURNAMENT_DISPLAY_NAME = object : ConfigKey<String>("tournament.display_name", "") {}
+
     /**
      * Tournament id (shared across all modes/stages).
      * Example: "season3".
