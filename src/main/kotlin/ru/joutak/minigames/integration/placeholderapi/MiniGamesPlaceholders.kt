@@ -4,9 +4,7 @@ import me.clip.placeholderapi.expansion.PlaceholderExpansion
 import org.bukkit.OfflinePlayer
 import org.bukkit.plugin.java.JavaPlugin
 import ru.joutak.minigames.MiniGamesAPI
-import ru.joutak.minigames.MiniGamesCore
 import ru.joutak.minigames.config.ConfigKeys
-import ru.joutak.minigames.managers.MatchmakingManager
 import ru.joutak.minigames.tournament.TournamentManager
 import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 
@@ -47,19 +45,6 @@ internal class MiniGamesPlaceholders(private val plugin: JavaPlugin) : Placehold
 
         val online = player?.player ?: return ""
         val style = safe { MiniGamesAPI.getCurrentTeamStyle(online) }
-
-        if (style == null) {
-            // TEMP diagnostic for empty placeholder bug.
-            val uuid = online.uniqueId
-            val active = MatchmakingManager.getActiveInstances()
-            val started = active.filter { it.started }
-            val mine = started.firstOrNull { it.hasActivePlayer(uuid) }
-            MiniGamesCore.plugin.logger.info(
-                "[joutak_games] empty for ${online.name} ($uuid) param=$p  " +
-                    "active=${active.size} started=${started.size} hasActive=${mine != null}  " +
-                    "teamIdx=${mine?.getActiveTeamIndex(uuid)}  lobbyIdx=${MiniGamesAPI.getPlayerTeamInLobby(online)}"
-            )
-        }
 
         return when (p.lowercase()) {
             "team_index" -> style?.teamNumber?.toString() ?: ""
