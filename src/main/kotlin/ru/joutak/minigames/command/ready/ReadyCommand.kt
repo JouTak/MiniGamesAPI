@@ -13,6 +13,8 @@ import org.bukkit.entity.Player
 import ru.joutak.minigames.command.PluginCommand
 import ru.joutak.minigames.domain.GameQueue
 import ru.joutak.minigames.managers.MatchmakingManager
+import ru.joutak.minigames.tournament.TournamentManager
+import ru.joutak.minigames.tournament.qualifier.TournamentQualifierManager
 import ru.joutak.minigames.ui.QueueBossBarManager
 
 object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> {
@@ -40,6 +42,10 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
         val uuid = player.uniqueId
 
         if (MiniGamesCore.configuration.get(ConfigKeys.TOURNAMENT_ENABLED)) {
+            if (TournamentManager.isOpenSoloEloMode()) {
+                return performOpenSoloTournamentReady(player)
+            }
+
             // Safety: in tournament mode, incomplete readiness must be confirmed via /forceready.
             player.sendMessage(Messages.prefixedComponent("messages.tournament.ready_confirm"))
             return false
@@ -100,6 +106,47 @@ object ReadyCommand : PluginCommand<LiteralArgumentBuilder<CommandSourceStack>> 
             )
         )
 
+        return true
+    }
+
+    private fun performOpenSoloTournamentReady(player: Player): Boolean {
+        val uuid = player.uniqueId
+
+        if (MatchmakingManager.isPlayerInStartedGame(uuid)) {
+            player.sendMessage(Messages.prefixedComponent("messages.ready.in_game"))
+            return false
+        }
+
+        if (MatchmakingManager.isPlayerInAnyInstance(uuid) || MatchmakingManager.isOpenSoloTournamentReady(uuid)) {
+            player.sendMessage(Messages.prefixedComponent("messages.ready.already_in_queue"))
+            return false
+        }
+
+        if (TournamentQualifierManager.isLocked()) {
+            player.sendMessage(Messages.prefixedComponent("messages.lobby.command_unavailable"))
+            return false
+        }
+
+        if (TournamentManager.getCachedTeamKey(uuid).isNullOrBlank()) {
+            player.sendMessage(Messages.prefixedComponent("messages.tournament.not_participant"))
+            return false
+        }
+
+        if (MatchmakingManager.pickWaitingInstanceForJoin() == null) {
+            player.sendMessage(Messages.prefixedComponent("messages.ready.no_free_arenas"))
+            return false
+        }
+
+        MatchmakingManager.markOpenSoloTournamentReady(uuid)
+        MatchmakingManager.rebuildTournamentWaitingAssignments()
+
+        if (!MatchmakingManager.isPlayerInAnyInstance(uuid)) {
+            MatchmakingManager.clearOpenSoloTournamentReady(uuid)
+            player.sendMessage(Messages.prefixedComponent("messages.ready.failed"))
+            return false
+        }
+
+        player.sendMessage(Messages.prefixedComponent("messages.ready.added_solo"))
         return true
     }
 }
